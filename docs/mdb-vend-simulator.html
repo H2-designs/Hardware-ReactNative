@@ -1,0 +1,518 @@
+<title>MDB Vend Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --surface: #ffffff;
+    --surface-2: #eeece4;
+    --border: #ddd8cc;
+    --text: #262320;
+    --muted: #6f6a60;
+    --accent: #0d7fa6;
+    --accent-soft: rgba(13, 127, 166, 0.10);
+    --ok: #1f8a4c;
+    --ok-soft: rgba(31, 138, 76, 0.12);
+    --warn: #a8710a;
+    --warn-soft: rgba(168, 113, 10, 0.14);
+    --err: #b23b3b;
+    --err-soft: rgba(178, 59, 59, 0.12);
+    --mono-chip: #efece2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b0e12; --surface: #12161c; --surface-2: #171d25; --border: #232a33;
+      --text: #d7e0ea; --muted: #8ea0b5;
+      --accent: #35c7ff; --accent-soft: rgba(53,199,255,0.12);
+      --ok: #6fe89a; --ok-soft: rgba(111,232,154,0.12);
+      --warn: #e8c766; --warn-soft: rgba(232,199,102,0.14);
+      --err: #e86f6f; --err-soft: rgba(232,111,111,0.12);
+      --mono-chip: #1a2029;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0e12; --surface: #12161c; --surface-2: #171d25; --border: #232a33;
+    --text: #d7e0ea; --muted: #8ea0b5;
+    --accent: #35c7ff; --accent-soft: rgba(53,199,255,0.12);
+    --ok: #6fe89a; --ok-soft: rgba(111,232,154,0.12);
+    --warn: #e8c766; --warn-soft: rgba(232,199,102,0.14);
+    --err: #e86f6f; --err-soft: rgba(232,111,111,0.12);
+    --mono-chip: #1a2029;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, Segoe UI, sans-serif;
+    line-height: 1.5; min-height: 100vh; display: flex; flex-direction: column;
+  }
+  .mono { font-family: 'IBM Plex Mono', Consolas, monospace; }
+
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 12px 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 15px; font-weight: 700; margin: 0; letter-spacing: 0.01em; }
+  .spacer { flex: 1; }
+  .chip {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600;
+    padding: 3px 10px; border-radius: 999px; letter-spacing: 0.03em; white-space: nowrap;
+  }
+  .chip.state { background: var(--accent-soft); color: var(--accent); }
+  .chip.money-none { background: var(--surface-2); color: var(--muted); }
+  .chip.money-auth { background: var(--warn-soft); color: var(--warn); }
+  .chip.money-cap  { background: var(--ok-soft); color: var(--ok); }
+  .chip.money-ref  { background: var(--err-soft); color: var(--err); }
+
+  #hint {
+    padding: 8px 20px; font-size: 13.5px; background: var(--accent-soft);
+    color: var(--text); border-bottom: 1px solid var(--border);
+  }
+  #hint b { color: var(--accent); }
+
+  main {
+    flex: 1; display: grid; gap: 12px; padding: 14px 20px;
+    grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+    align-items: start;
+  }
+  .panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .panel h2 {
+    margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; display: flex; align-items: center; gap: 8px;
+  }
+  .panel h2 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .panel.vmc h2 .dot { background: var(--muted); }
+  .panel.mdb h2 .dot { background: var(--accent); }
+  .panel.app h2 .dot { background: var(--warn); }
+  .panel.gw  h2 .dot { background: var(--ok); }
+  .panel .sub { font-size: 11px; color: var(--muted); margin-top: -4px; }
+
+  button {
+    font-family: inherit; font-size: 12.5px; font-weight: 600;
+    padding: 7px 10px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text); cursor: pointer; text-align: left;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button:disabled { opacity: 0.35; cursor: default; }
+  button.good:hover:not(:disabled) { border-color: var(--ok); color: var(--ok); }
+  button.bad:hover:not(:disabled) { border-color: var(--err); color: var(--err); }
+  button.primary { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+  select {
+    font-family: inherit; font-size: 12.5px; padding: 6px 8px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+  }
+  label.row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+
+  .statusline { font-size: 12px; color: var(--muted); min-height: 16px; }
+  .statusline b { color: var(--text); }
+
+  #logwrap {
+    border-top: 1px solid var(--border); background: var(--surface);
+    display: flex; flex-direction: column; height: 320px;
+  }
+  #logbar { padding: 8px 20px 0; display: flex; align-items: baseline; gap: 12px; }
+  #logbar h2 { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin: 0; }
+  #logbar .legend { font-size: 11px; color: var(--muted); }
+  #log {
+    flex: 1; overflow-y: auto; padding: 8px 20px 16px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.75;
+  }
+  .l { white-space: pre-wrap; }
+  .l .tag { font-weight: 700; }
+  .l.vmc .tag { color: var(--muted); }
+  .l.mdb .tag { color: var(--accent); }
+  .l.app .tag { color: var(--warn); }
+  .l.gw  .tag { color: var(--ok); }
+  .l.cb  { background: var(--warn-soft); border-radius: 4px; }
+  .l.wire-tx { color: var(--accent); }
+  .l.money { background: var(--ok-soft); border-radius: 4px; }
+  .l.err { background: var(--err-soft); border-radius: 4px; }
+  .l.info { color: var(--muted); font-style: italic; }
+</style>
+
+<header>
+  <h1>MDB VEND SIMULATOR</h1>
+  <span class="chip state" id="stateChip">CLOSED</span>
+  <span class="chip money-none" id="moneyChip">money: —</span>
+  <span class="spacer"></span>
+  <button id="btnOpen" class="primary">Power on — MdbLib.start()</button>
+  <button id="btnClose" disabled>MdbLib.stop()</button>
+</header>
+
+<div id="hint">Press <b>Power on</b> to open the MDB port. The library will run the whole setup handshake with the machine by itself.</div>
+
+<main>
+  <section class="panel vmc">
+    <h2><span class="dot"></span>Vending machine (VMC)</h2>
+    <div class="sub">the master — polls constantly, reports physical results</div>
+    <button id="btnSelect" disabled>Customer selects an item →</button>
+    <label class="row">price
+      <select id="priceSel">
+        <option value="375">SAR 3.75</option>
+        <option value="500">SAR 5.00</option>
+        <option value="1000">SAR 10.00</option>
+      </select>
+      item #<select id="itemSel"><option>12</option><option>7</option><option>21</option></select>
+    </label>
+    <button id="btnDispenseOk" class="good" disabled>✓ Product dispensed → VEND SUCCESS</button>
+    <button id="btnDispenseJam" class="bad" disabled>✗ Jam / empty → VEND FAILURE</button>
+    <button id="btnVmcCancel" class="bad" disabled>VMC cancels the vend (13 01)</button>
+    <button id="btnWalkAway" disabled>Customer walks away (13 04)</button>
+    <button id="btnReset" disabled>VMC sends RESET (10)</button>
+  </section>
+
+  <section class="panel mdb">
+    <h2><span class="dot"></span>MdbLib (the library)</h2>
+    <div class="sub">state machine — answers every poll, fires the callbacks</div>
+    <div class="statusline">MDB state: <b id="mdbStateTxt">INACTIVE (port closed)</b></div>
+    <div class="statusline mono" id="pollLine">idle POLL → ACK ×0</div>
+    <label class="row">setCancelMode(…) — set once:
+      <select id="cancelModeSel">
+        <option value="denied">VEND_DENIED (06)</option>
+        <option value="cancel">SESSION_CANCEL_REQUEST (04)</option>
+      </select>
+    </label>
+    <div class="statusline" id="pendingTxt"></div>
+  </section>
+
+  <section class="panel app">
+    <h2><span class="dot"></span>Your app (VendListener)</h2>
+    <div class="sub">only decides the money — never touches the wire</div>
+    <div class="statusline" id="appStatus">waiting for onVendRequest…</div>
+    <button id="btnApprove" class="good" disabled>Gateway APPROVED → MdbLib.approveVend()</button>
+    <button id="btnDecline" class="bad" disabled>Gateway DECLINED → MdbLib.cancelVend()</button>
+  </section>
+
+  <section class="panel gw">
+    <h2><span class="dot"></span>Payment gateway</h2>
+    <div class="sub">authorize → capture / refund — money follows the product</div>
+    <div class="statusline">hold: <b id="gwHold">none</b></div>
+    <div class="statusline">last transaction: <b id="gwLast">—</b></div>
+  </section>
+</main>
+
+<div id="logwrap">
+  <div id="logbar">
+    <h2>Live log</h2>
+    <span class="legend">[VMC] machine · [MDB] library wire+state · [APP] your callbacks · [GW] money — highlighted rows are VendListener callbacks / money events</span>
+    <span class="spacer"></span>
+    <button id="btnClear" style="font-size:11px;padding:4px 8px;">clear</button>
+  </div>
+  <div id="log" aria-live="polite"></div>
+</div>
+
+<script>
+(function(){
+  var logEl = document.getElementById('log');
+  var stateChip = document.getElementById('stateChip');
+  var moneyChip = document.getElementById('moneyChip');
+  var mdbStateTxt = document.getElementById('mdbStateTxt');
+  var pollLine = document.getElementById('pollLine');
+  var pendingTxt = document.getElementById('pendingTxt');
+  var appStatus = document.getElementById('appStatus');
+  var gwHold = document.getElementById('gwHold');
+  var gwLast = document.getElementById('gwLast');
+  var hint = document.getElementById('hint');
+
+  var btn = {
+    open: document.getElementById('btnOpen'),
+    close: document.getElementById('btnClose'),
+    select: document.getElementById('btnSelect'),
+    ok: document.getElementById('btnDispenseOk'),
+    jam: document.getElementById('btnDispenseJam'),
+    vmcCancel: document.getElementById('btnVmcCancel'),
+    walk: document.getElementById('btnWalkAway'),
+    reset: document.getElementById('btnReset'),
+    approve: document.getElementById('btnApprove'),
+    decline: document.getElementById('btnDecline'),
+    clear: document.getElementById('btnClear')
+  };
+  var priceSel = document.getElementById('priceSel');
+  var itemSel = document.getElementById('itemSel');
+  var cancelModeSel = document.getElementById('cancelModeSel');
+
+  // phase: CLOSED, SETUP, SESSION_IDLE, DECIDING, APPROVED_WAIT, DISPENSING, CLOSING
+  var phase = 'CLOSED';
+  var pollCount = 0;
+  var pollTimer = null;
+  var busy = false;          // an animated sequence is running
+  var curPrice = 0, curItem = 0;
+  var money = 'none';        // none | auth | cap | ref | void | declined
+
+  function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  function hex(n, w){ var s = n.toString(16).toUpperCase(); while (s.length < (w||2)) s = '0' + s; return s; }
+  function priceBytes(){ return hex(curPrice >> 8) + ' ' + hex(curPrice & 0xFF); }
+  function itemBytes(){ return hex(curItem >> 8) + ' ' + hex(curItem & 0xFF); }
+  function sar(units){ return 'SAR ' + (units/100).toFixed(2); }
+
+  function log(lane, text, cls){
+    var div = document.createElement('div');
+    div.className = 'l ' + lane + (cls ? ' ' + cls : '');
+    var tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.textContent = '[' + lane.toUpperCase() + '] ';
+    div.appendChild(tag);
+    div.appendChild(document.createTextNode(text));
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  var logInfo = function(text){
+    var div = document.createElement('div');
+    div.className = 'l info';
+    div.textContent = text;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  };
+
+  function setHint(html){ hint.innerHTML = html; }
+  function setMdbState(s){ mdbStateTxt.textContent = s; stateChip.textContent = s.split(' ')[0]; }
+  function setMoney(state, label){
+    money = state;
+    moneyChip.textContent = 'money: ' + label;
+    moneyChip.className = 'chip ' + (state==='auth' ? 'money-auth' : state==='cap' ? 'money-cap' : (state==='ref'||state==='declined'||state==='void') ? 'money-ref' : 'money-none');
+  }
+  function setPending(t){ pendingTxt.textContent = t; }
+
+  function refreshButtons(){
+    btn.open.disabled = !(phase === 'CLOSED') || busy;
+    btn.close.disabled = (phase === 'CLOSED') || busy;
+    btn.select.disabled = !(phase === 'SESSION_IDLE') || busy;
+    btn.ok.disabled = !(phase === 'DISPENSING') || busy;
+    btn.jam.disabled = !(phase === 'DISPENSING') || busy;
+    btn.vmcCancel.disabled = !(phase === 'SESSION_IDLE' || phase === 'DECIDING') || busy;
+    btn.walk.disabled = !(phase === 'SESSION_IDLE') || busy;
+    btn.reset.disabled = (phase === 'CLOSED') || busy;
+    btn.approve.disabled = !(phase === 'DECIDING') || busy;
+    btn.decline.disabled = !(phase === 'DECIDING') || busy;
+  }
+
+  function startPolling(){
+    stopPolling();
+    pollTimer = setInterval(function(){
+      if (phase === 'SESSION_IDLE' || phase === 'DECIDING') {
+        pollCount++;
+        pollLine.textContent = 'idle POLL → ACK ×' + pollCount + '  (suppressed from log, like the real library)';
+      }
+    }, 800);
+  }
+  function stopPolling(){ if (pollTimer) clearInterval(pollTimer); pollTimer = null; }
+
+  async function runSetup(){
+    busy = true; refreshButtons();
+    setMdbState('INACTIVE_STATE');
+    log('vmc', 'RX: 10          (RESET)');
+    await sleep(300);
+    log('mdb', 'TX: ACK', 'wire-tx');
+    await sleep(300);
+    log('vmc', 'RX: 12          (POLL)');
+    log('mdb', 'TX: 00          (JUST RESET)', 'wire-tx');
+    await sleep(350);
+    log('vmc', 'RX: 11 00 …     (SETUP CONFIG DATA)');
+    log('mdb', 'TX: 01 02 19 78 01 02 E8 0E   (READER CONFIG DATA, level 2)', 'wire-tx');
+    await sleep(350);
+    log('vmc', 'RX: 11 01 …     (SETUP MAX/MIN PRICES)');
+    log('mdb', 'TX: ACK', 'wire-tx');
+    await sleep(350);
+    log('vmc', 'RX: 17 00       (EXPANSION REQUEST ID)');
+    log('mdb', 'TX: 09 43 41 53 …  (PERIPHERAL ID)', 'wire-tx');
+    setMdbState('DISABLED_STATE');
+    await sleep(350);
+    log('vmc', 'RX: 14 01       (READER ENABLE)');
+    log('mdb', 'TX: ACK', 'wire-tx');
+    setMdbState('ENABLED_STATE');
+    await sleep(350);
+    log('vmc', 'RX: 12          (POLL)');
+    log('mdb', 'TX: 03 FF FF 00 00 00 01 00 00 00   (BEGIN SESSION — auto mode)', 'wire-tx');
+    setMdbState('VEND_STATE (session idle)');
+    logInfo('— session open. The library did ALL of the above by itself. —');
+    phase = 'SESSION_IDLE';
+    busy = false; refreshButtons();
+    setHint('Session is open. Now act as the <b>customer</b>: pick a price and press <b>"Customer selects an item"</b> on the machine panel.');
+  }
+
+  async function closeSession(afterText){
+    // SESSION COMPLETE -> END SESSION -> onSessionEnded -> auto new session
+    phase = 'CLOSING'; refreshButtons();
+    await sleep(400);
+    log('vmc', 'RX: 13 04       (SESSION COMPLETE)');
+    log('mdb', 'TX: ACK', 'wire-tx');
+    await sleep(400);
+    log('vmc', 'RX: 12          (POLL)');
+    log('mdb', 'TX: 07          (END SESSION)', 'wire-tx');
+    setMdbState('ENABLED_STATE');
+    await sleep(250);
+    log('app', 'onSessionEnded()  → cleanup: cleared txn id / amount / UI reset', 'cb');
+    appStatus.textContent = 'cleaned up — waiting for onVendRequest…';
+    gwHold.textContent = 'none';
+    setPending('');
+    if (afterText) logInfo(afterText);
+    await sleep(500);
+    // auto mode: new session begins
+    log('vmc', 'RX: 12          (POLL)');
+    log('mdb', 'TX: 03 FF FF …  (BEGIN SESSION — auto mode re-armed)', 'wire-tx');
+    setMdbState('VEND_STATE (session idle)');
+    setMoney('none', '—');
+    phase = 'SESSION_IDLE'; busy = false; refreshButtons();
+    setHint('New session started automatically (auto mode). Select another item, or try a different exit: <b>VMC cancel</b>, <b>walk away</b>, or <b>RESET</b>.');
+  }
+
+  // ---------------- buttons ----------------
+
+  btn.open.onclick = async function(){
+    pollCount = 0; pollLine.textContent = 'idle POLL → ACK ×0';
+    log('app', 'MdbLib.start()  — open the port', 'cb');
+    startPolling();
+    await runSetup();
+  };
+
+  btn.close.onclick = function(){
+    busy = false; stopPolling();
+    phase = 'CLOSED'; refreshButtons();
+    setMdbState('INACTIVE (port closed)');
+    log('app', 'MdbLib.stop()', 'cb');
+    logInfo('— port closed. VMC_STATUS heartbeat announces INACTIVE immediately. —');
+    setHint('Port closed. Press <b>Power on</b> to start again.');
+    setMoney('none', '—');
+    appStatus.textContent = 'waiting for onVendRequest…';
+    gwHold.textContent = 'none';
+    setPending('');
+  };
+
+  btn.select.onclick = async function(){
+    curPrice = parseInt(priceSel.value, 10);
+    curItem = parseInt(itemSel.options[itemSel.selectedIndex].text, 10);
+    busy = true; refreshButtons();
+    log('vmc', 'RX: 13 00 ' + priceBytes() + ' ' + itemBytes() + '   (VEND REQUEST — ' + sar(curPrice) + ', item ' + curItem + ')');
+    await sleep(300);
+    log('mdb', 'TX: ACK   (request stored; engine will keep ACKing polls while the app decides)', 'wire-tx');
+    await sleep(300);
+    log('app', 'onVendRequest(amount=' + (curPrice/100).toFixed(2) + ', minorUnits=' + curPrice + ', itemNumber=' + curItem + ')', 'cb');
+    appStatus.textContent = 'onVendRequest fired: ' + sar(curPrice) + ', item ' + curItem + ' — deciding…';
+    log('gw', 'AUTHORIZE requested for ' + sar(curPrice) + ' (hold, not a charge yet)…', 'money');
+    gwHold.textContent = sar(curPrice) + ' (authorizing…)';
+    phase = 'DECIDING'; busy = false; refreshButtons();
+    setHint('Now act as the <b>gateway</b>: on the app panel, press <b>APPROVED</b> or <b>DECLINED</b>. Notice the machine keeps polling and the library keeps ACKing — no rush.');
+  };
+
+  btn.approve.onclick = async function(){
+    busy = true; refreshButtons();
+    log('gw', 'authorization APPROVED — hold placed for ' + sar(curPrice), 'money');
+    gwHold.textContent = sar(curPrice) + ' (held)';
+    setMoney('auth', 'AUTHORIZED ' + sar(curPrice));
+    await sleep(250);
+    log('app', 'MdbLib.approveVend()  → true (request was pending)', 'cb');
+    setPending('vendApprovePending = true  → goes out on the next POLL');
+    await sleep(600);
+    log('vmc', 'RX: 12          (POLL)');
+    log('mdb', 'TX: 05 ' + priceBytes() + '   (VEND APPROVED)', 'wire-tx');
+    setPending('');
+    setMdbState('VEND_STATE (dispensing)');
+    phase = 'DISPENSING'; busy = false; refreshButtons();
+    setHint('Approved! Now act as the <b>machine</b>: did the product physically drop? Press <b>VEND SUCCESS</b> or <b>VEND FAILURE</b> on the machine panel.');
+  };
+
+  btn.decline.onclick = async function(){
+    busy = true; refreshButtons();
+    log('gw', 'authorization DECLINED — no hold kept', 'money');
+    gwHold.textContent = 'none';
+    setMoney('declined', 'DECLINED');
+    gwLast.textContent = sar(curPrice) + ' declined';
+    await sleep(250);
+    var mode = cancelModeSel.value;
+    log('app', 'MdbLib.cancelVend()  → true (uses the standing mode set once via setCancelMode)', 'cb');
+    setPending('sessionCancelPending = true  → goes out on the next POLL');
+    await sleep(600);
+    log('vmc', 'RX: 12          (POLL)');
+    if (mode === 'denied') log('mdb', 'TX: 06          (VEND DENIED)', 'wire-tx');
+    else log('mdb', 'TX: 04          (SESSION CANCEL REQUEST)', 'wire-tx');
+    setPending('');
+    await closeSession('— declined path: no money moved, session closed cleanly. onVendSuccess/onVendFailure were correctly SKIPPED. —');
+  };
+
+  btn.ok.onclick = async function(){
+    busy = true; refreshButtons();
+    log('vmc', 'RX: 13 02 ' + itemBytes() + '   (VEND SUCCESS — the item dropped!)');
+    await sleep(300);
+    log('mdb', 'TX: ACK', 'wire-tx');
+    await sleep(250);
+    log('app', 'onVendSuccess(itemNumber=' + curItem + ')', 'cb');
+    appStatus.textContent = 'onVendSuccess — capturing payment…';
+    await sleep(300);
+    log('gw', 'CAPTURE ' + sar(curPrice) + ' — money actually taken now', 'money');
+    setMoney('cap', 'CAPTURED ' + sar(curPrice));
+    gwHold.textContent = 'none (captured)';
+    gwLast.textContent = sar(curPrice) + ' captured ✓';
+    await closeSession('— the happy path: authorize → approve → dispense → CAPTURE. Money followed the product. —');
+  };
+
+  btn.jam.onclick = async function(){
+    busy = true; refreshButtons();
+    log('vmc', 'RX: 13 03       (VEND FAILURE — nothing came out)', 'err');
+    await sleep(300);
+    log('mdb', 'TX: ACK   (refund handshake; engine keeps ACKing until the VMC moves on)', 'wire-tx');
+    await sleep(250);
+    log('app', 'onVendFailure()', 'cb');
+    appStatus.textContent = 'onVendFailure — refunding…';
+    await sleep(300);
+    log('gw', 'REFUND / VOID the ' + sar(curPrice) + ' hold — customer got nothing', 'money');
+    setMoney('ref', 'REFUNDED ' + sar(curPrice));
+    gwHold.textContent = 'none (released)';
+    gwLast.textContent = sar(curPrice) + ' refunded ↩';
+    await closeSession('— jam path: approved but NOT dispensed → refund. This is exactly why capture waits for VEND SUCCESS. —');
+  };
+
+  btn.vmcCancel.onclick = async function(){
+    busy = true; refreshButtons();
+    var hadRequest = (phase === 'DECIDING');
+    log('vmc', 'RX: 13 01       (VEND CANCEL — the machine cancels)', 'err');
+    await sleep(300);
+    log('mdb', 'TX: ACK', 'wire-tx');
+    await sleep(500);
+    log('vmc', 'RX: 12          (POLL)');
+    if (cancelModeSel.value === 'denied') log('mdb', 'TX: 06          (VEND DENIED — per standing cancel mode)', 'wire-tx');
+    else log('mdb', 'TX: 04          (SESSION CANCEL REQUEST — per standing cancel mode)', 'wire-tx');
+    if (hadRequest) {
+      log('gw', 'no charge was made — nothing to release (approval never happened)', 'money');
+      setMoney('void', 'VOIDED');
+      appStatus.textContent = 'request was cancelled by the machine — stand down';
+    }
+    await closeSession('— VMC-initiated cancel: the library answered it automatically with your configured mode. —');
+  };
+
+  btn.walk.onclick = async function(){
+    busy = true; refreshButtons();
+    logInfo('— customer walked away without selecting anything; the VMC times the session out —');
+    await closeSession('— empty session: no onVendRequest ever fired, but onSessionEnded STILL fired. That is why cleanup lives there. —');
+  };
+
+  btn.reset.onclick = async function(){
+    busy = true; refreshButtons();
+    log('vmc', 'RX: 10          (RESET — from ANY state)', 'err');
+    await sleep(300);
+    log('mdb', 'TX: ACK   → jump to INACTIVE_STATE, JUST RESET counter re-armed', 'wire-tx');
+    setMdbState('INACTIVE_STATE');
+    setMoney('none', '—');
+    gwHold.textContent = 'none';
+    setPending('');
+    appStatus.textContent = 'waiting for onVendRequest…';
+    logInfo('— the library now redoes the whole setup handshake by itself: —');
+    await sleep(500);
+    await runSetup();
+  };
+
+  btn.clear.onclick = function(){ logEl.innerHTML = ''; };
+
+  cancelModeSel.onchange = function(){
+    var m = cancelModeSel.value === 'denied' ? 'VEND_DENIED' : 'SESSION_CANCEL_REQUEST';
+    log('app', 'MdbLib.setCancelMode(' + m + ')  — set once, persisted; cancelVend() now sends this', 'cb');
+  };
+
+  refreshButtons();
+})();
+</script>

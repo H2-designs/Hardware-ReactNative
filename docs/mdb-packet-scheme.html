@@ -1,0 +1,717 @@
+<title>MDB Transaction Packets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f4ef; --surface: #ffffff; --surface-2: #eeece4; --border: #ddd8cc;
+    --text: #262320; --muted: #6f6a60;
+    --accent: #0d7fa6; --accent-soft: rgba(13,127,166,0.10);
+    --ok: #1f8a4c; --ok-soft: rgba(31,138,76,0.10);
+    --warn: #a8710a; --warn-soft: rgba(168,113,10,0.12);
+    --err: #b23b3b; --err-soft: rgba(178,59,59,0.10);
+    --mono-chip: #efece2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b0e12; --surface: #12161c; --surface-2: #171d25; --border: #232a33;
+      --text: #d7e0ea; --muted: #8ea0b5;
+      --accent: #35c7ff; --accent-soft: rgba(53,199,255,0.12);
+      --ok: #6fe89a; --ok-soft: rgba(111,232,154,0.10);
+      --warn: #e8c766; --warn-soft: rgba(232,199,102,0.12);
+      --err: #e86f6f; --err-soft: rgba(232,111,111,0.10);
+      --mono-chip: #1a2029;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0e12; --surface: #12161c; --surface-2: #171d25; --border: #232a33;
+    --text: #d7e0ea; --muted: #8ea0b5;
+    --accent: #35c7ff; --accent-soft: rgba(53,199,255,0.12);
+    --ok: #6fe89a; --ok-soft: rgba(111,232,154,0.10);
+    --warn: #e8c766; --warn-soft: rgba(232,199,102,0.12);
+    --err: #e86f6f; --err-soft: rgba(232,111,111,0.10);
+    --mono-chip: #1a2029;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, Segoe UI, sans-serif; line-height: 1.6;
+  }
+  ::selection { background: var(--accent-soft); }
+  code, .mono { font-family: 'IBM Plex Mono', Consolas, monospace; }
+
+  header.top {
+    position: sticky; top: 0; z-index: 10; background: var(--surface);
+    border-bottom: 1px solid var(--border); padding: 14px 24px;
+    display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap;
+  }
+  header.top .title { font-weight: 700; font-size: 15px; letter-spacing: 0.01em; }
+  header.top nav { display: flex; gap: 14px; flex-wrap: wrap; }
+  header.top nav a {
+    color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500;
+    border-bottom: 1px solid transparent; padding-bottom: 2px;
+  }
+  header.top nav a:hover, header.top nav a:focus-visible { color: var(--accent); border-bottom-color: var(--accent); }
+
+  main { max-width: 900px; margin: 0 auto; padding: 44px 24px 96px; }
+  h1 { font-size: 29px; font-weight: 700; text-wrap: balance; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); font-size: 16px; max-width: 68ch; margin: 0 0 20px; }
+  .status {
+    display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+    font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    background: var(--warn-soft); color: var(--warn); padding: 4px 11px; border-radius: 999px;
+    margin: 0 0 40px;
+  }
+  h2 {
+    font-size: 21px; font-weight: 700; margin: 60px 0 6px; padding-top: 8px;
+    letter-spacing: -0.005em; scroll-margin-top: 70px; text-wrap: balance;
+  }
+  h2 .eyebrow {
+    display: block; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500;
+    color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px;
+  }
+  h3 { font-size: 15.5px; font-weight: 600; margin: 32px 0 8px; }
+  h3 code { background: var(--mono-chip); padding: 2px 8px; border-radius: 5px; font-size: 14px; }
+  p { margin: 0 0 14px; max-width: 74ch; }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 6px; max-width: 70ch; }
+  strong { font-weight: 600; }
+
+  .cmd {
+    font-family: 'IBM Plex Mono', monospace; background: var(--mono-chip);
+    padding: 1px 6px; border-radius: 4px; font-size: 0.92em; white-space: nowrap;
+  }
+
+  pre.code {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 15px 17px; overflow-x: auto; font-size: 12.5px; line-height: 1.6;
+    font-family: 'IBM Plex Mono', monospace; margin: 12px 0 22px;
+  }
+  pre.code .k { color: var(--accent); }
+  pre.code .c { color: var(--muted); font-style: italic; }
+  pre.code .s { color: var(--ok); }
+  pre.code .n { color: var(--warn); }
+
+  .table-wrap { overflow-x: auto; margin: 16px 0 26px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  td.mono, td code { font-family: 'IBM Plex Mono', monospace; }
+  td code { background: var(--mono-chip); padding: 1px 5px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
+  td.num { text-align: right; font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+  td.bit { text-align: center; font-family: 'IBM Plex Mono', monospace; color: var(--muted); }
+  tr.na td { opacity: 0.62; }
+
+  .callout {
+    border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    background: var(--surface); border-radius: 0 8px 8px 0;
+    padding: 13px 17px; margin: 18px 0; font-size: 14.5px;
+  }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.ok { border-left-color: var(--ok); }
+  .callout.err { border-left-color: var(--err); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  .pick {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 14px; margin: 18px 0 8px;
+  }
+  .pick > div {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px;
+  }
+  .pick > div.rec { border-color: var(--ok); }
+  .pick h4 { margin: 0 0 4px; font-size: 14px; }
+  .pick .tagline { font-size: 11px; font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .pick > div.rec .tagline { color: var(--ok); }
+  .pick pre { margin: 0 0 10px; font-size: 12px; }
+  .pick ul { margin: 0; padding-left: 18px; font-size: 13px; }
+
+  figure {
+    margin: 26px 0 30px; padding: 20px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 10px; overflow-x: auto;
+  }
+  figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  figcaption { margin-top: 14px; font-size: 13px; color: var(--muted); text-align: center; }
+
+  .outrow {
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .outrow:last-child { border-bottom: none; }
+  .outrow .val {
+    font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600;
+    white-space: nowrap; min-width: 210px;
+  }
+  .outrow .val .b { color: var(--accent); }
+  .outrow .val .m { color: var(--muted); }
+  .outrow .what { font-size: 13.5px; color: var(--muted); }
+  .outrow .what b { color: var(--text); font-weight: 600; }
+  .flag { color: var(--err); font-weight: 700; }
+
+  footer { max-width: 900px; margin: 0 auto; padding: 0 24px 64px; color: var(--muted); font-size: 12.5px; }
+</style>
+
+<header class="top">
+  <span class="title">MDB PACKET SCHEME</span>
+  <nav>
+    <a href="#why">Why</a>
+    <a href="#shape">Packet shape</a>
+    <a href="#form">Bits or array</a>
+    <a href="#vend">VEND</a>
+    <a href="#hshake">HSHAKE</a>
+    <a href="#auto">Auto-session rule</a>
+    <a href="#stat">STAT</a>
+    <a href="#lifecycle">Lifecycle</a>
+    <a href="#transport">Transport</a>
+    <a href="#backend">Consuming it</a>
+  </nav>
+</header>
+
+<main>
+  <h1>MDB Transaction Packets</h1>
+  <p class="lede">
+    One JSON packet per complete transaction instead of one text line per bus exchange. Flat short
+    keys for the data, and a single field whose bits are the transaction's state — so a whole sale
+    reads as <code class="cmd">"VEND": 63</code> and a stalled one reads as
+    <code class="cmd">3</code>.
+  </p>
+  <span class="status">Design proposal &middot; not implemented yet</span>
+
+  <!-- ============================================================ -->
+  <section id="why">
+    <h2><span class="eyebrow">01 &middot; the problem</span>Why packets, when we already have a log</h2>
+    <p>
+      Today the device publishes one human-readable line per bus exchange
+      (<code class="cmd">RX: 0x11, 0x01, ... -&gt; TX: ACK</code>). That is perfect for watching a
+      machine live and useless for anything else: to answer "did machine 85E5F7 complete its
+      handshake?" a backend has to re-implement the state machine by parsing English.
+    </p>
+    <div class="table-wrap"><table>
+      <thead><tr><th></th><th>Log stream (today, unchanged)</th><th>Packet stream (new)</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Unit</strong></td><td>one line per exchange</td><td>one packet per transaction</td></tr>
+        <tr><td><strong>Volume</strong></td><td>hundreds of messages/minute</td><td>a handful/minute; zero while idle</td></tr>
+        <tr><td><strong>Shape</strong></td><td>free text</td><td>JSON, flat short keys</td></tr>
+        <tr><td><strong>Answers</strong></td><td>"what happened at 14:32:07?"</td><td>"which machines are stalling, and where?"</td></tr>
+        <tr><td><strong>Audience</strong></td><td>a person with the dashboard open</td><td>a backend, a database, an alert rule</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout ok">
+      <p>
+        <strong>Nothing about the existing wire changes.</strong> Packets go to a new topic
+        (<code class="cmd">.../packets</code>); <code class="cmd">liveLog</code>,
+        <code class="cmd">commands</code>, and every tagged message
+        (<code class="cmd">VMC_STATUS:</code>, <code class="cmd">SETTINGS_JSON:</code>,
+        <code class="cmd">CONFIG_JSON:</code>) keep working byte-for-byte, so the current dashboard
+        needs no changes at all.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="shape">
+    <h2><span class="eyebrow">02 &middot; the container</span>The packet shape</h2>
+    <p>
+      No envelope and no nesting. A packet is a flat object of short keys, and
+      <strong>one of those keys names the packet type while also carrying its state</strong> —
+      <code class="cmd">VEND</code>, <code class="cmd">HSHAKE</code>, or
+      <code class="cmd">STAT</code>. Which key is present is how a consumer knows what it received.
+    </p>
+    <pre class="code">{
+  <span class="k">"VEND"</span>: <span class="n">63</span>,          <span class="c">// the transaction state, as bits - and the packet's identity</span>
+  <span class="k">"MSK"</span>:  <span class="n">63</span>,          <span class="c">// which bits applied on this path</span>
+  <span class="k">"OUT"</span>:  <span class="s">"DISPENSED"</span>,
+  <span class="k">"AMT"</span>:  <span class="n">3.75</span>,
+  <span class="k">"MIN"</span>:  <span class="n">375</span>,
+  <span class="k">"SLOT"</span>: <span class="n">1</span>,
+  <span class="k">"TS"</span>:   <span class="n">1756312836682</span>,
+  <span class="k">"DUR"</span>:  <span class="n">8420</span>
+}</pre>
+    <p>
+      That is the entire packet — about 110 bytes for a full sale, and everything a backend needs to
+      bank it, alert on it, or chart it. Raw wire bytes are deliberately <em>not</em> in here: the
+      log stream already carries every byte, and duplicating them would make the packet ten times
+      bigger to serve a different audience. Packets carry state and money; the log carries bytes.
+    </p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="form">
+    <h2><span class="eyebrow">03 &middot; the decision</span>Bits or array</h2>
+    <p>Both forms you sketched work. They differ only in how the state field is encoded:</p>
+    <div class="pick">
+      <div class="rec">
+        <h4>Bitwise integer</h4>
+        <div class="tagline">recommended</div>
+        <pre class="code"><span class="k">"VEND"</span>: <span class="n">63</span>,
+<span class="k">"MSK"</span>:  <span class="n">63</span></pre>
+        <ul>
+          <li>Two integers cover the whole transaction state.</li>
+          <li>One arithmetic health check, no string work: <code>(VEND &amp; MSK) == MSK</code>.</li>
+          <li>Indexable as a plain integer column; <code>WHERE vend &amp; 8 = 0</code> finds every non-dispensed sale.</li>
+          <li>Costs you readability — nobody eyeballs <code>51</code> and sees a decline.</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Array of bits</h4>
+        <div class="tagline">alternative</div>
+        <pre class="code"><span class="k">"VEND"</span>: [<span class="n">1</span>,<span class="n">1</span>,<span class="n">1</span>,<span class="n">1</span>,<span class="n">1</span>,<span class="n">1</span>]</pre>
+        <ul>
+          <li>Readable at a glance in a raw log.</li>
+          <li>Can hold a third state directly (<code>2</code> = not applicable) instead of needing a mask.</li>
+          <li>Roughly 6&times; the bytes, and still needs the position order documented — the readability is only as real as your memory of what position 4 means.</li>
+        </ul>
+      </div>
+    </div>
+    <p>
+      I would take the integer. The array's advantage is legibility, but the moment you need to know
+      what position 4 is you are reading this page anyway — and the integer form is the one that
+      makes fleet queries trivial instead of requiring JSON array indexing.
+    </p>
+
+    <h3>Bit order, stated once and explicitly</h3>
+    <p>
+      <strong>Bit 0 is the least significant bit and it is step 1.</strong> Step <em>n</em> has value
+      2<sup>n-1</sup>. This is worth being pedantic about: the one protocol bug in this project that
+      survived review was exactly a bit-order mistake — the Level 3 optional-feature bytes are sent
+      MSB-first, and reading them the intuitive way put "Always Idle" on the wrong byte. A bit
+      ordering that is only implied is a bug waiting for a quiet afternoon.
+    </p>
+    <div class="callout">
+      <p>
+        <strong>Why a mask, and not just zeros.</strong> A zero bit is ambiguous on its own: at
+        Level 1 the EXPANSION commands do not exist, and on a declined sale nothing is ever
+        dispensed — those zeros are correct, not faults. <code class="cmd">MSK</code> says which
+        bits were expected on this particular path, so
+        <code class="cmd">(VEND &amp; MSK) == MSK</code> means "everything that should have happened
+        did", and <code class="cmd">MSK &amp; ~VEND</code> is exactly the set of steps that went
+        missing. One expression, every level, every outcome.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="vend">
+    <h2><span class="eyebrow">04 &middot; packet</span><code>VEND</code> — the money path</h2>
+    <p>
+      One packet per real transaction, spanning session open to session close — the six steps from
+      your sketch, in order.
+    </p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Step</th><th>Bit</th><th>Value</th><th>Key</th><th>Means</th><th>Wire</th></tr></thead>
+      <tbody>
+        <tr><td class="bit">1</td><td class="bit">0</td><td class="num">1</td><td><code>BGN</code></td><td>Session begin sent</td><td><code>03 ...</code> out</td></tr>
+        <tr><td class="bit">2</td><td class="bit">1</td><td class="num">2</td><td><code>VREQ</code></td><td>Vend request received — customer picked a slot</td><td><code>13 00</code> in</td></tr>
+        <tr><td class="bit">3</td><td class="bit">2</td><td class="num">4</td><td><code>APRV</code></td><td>Approved — vend approved went out</td><td><code>05 ...</code> out</td></tr>
+        <tr><td class="bit">4</td><td class="bit">3</td><td class="num">8</td><td><code>SUCC</code></td><td>Success — the machine confirmed the product dropped</td><td><code>13 02</code> in</td></tr>
+        <tr><td class="bit">5</td><td class="bit">4</td><td class="num">16</td><td><code>SCMP</code></td><td>Session complete received</td><td><code>13 04</code> in</td></tr>
+        <tr><td class="bit">6</td><td class="bit">5</td><td class="num">32</td><td><code>ESN</code></td><td>End session sent</td><td><code>07</code> out</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Data keys</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>AMT</code></td><td>Display price, scale factor already applied — <code>3.75</code></td></tr>
+        <tr><td><code>MIN</code></td><td>Exact integer minor units — <code>375</code>. The figure to send a gateway; never do money maths on <code>AMT</code>.</td></tr>
+        <tr><td><code>SLOT</code></td><td>Item/slot number the customer selected</td></tr>
+        <tr><td><code>OUT</code></td><td><code>DISPENSED</code> &middot; <code>DENIED</code> &middot; <code>FAILED</code> (approved, never dropped — refund) &middot; <code>CANCELLED</code> &middot; <code>TIMEOUT</code></td></tr>
+        <tr><td><code>TS</code> / <code>DUR</code></td><td>Epoch ms at session open, and total duration in ms</td></tr>
+        <tr><td><code>MS</code></td><td><em>Optional.</em> Per-step offsets in ms, in bit order — <code>[0,312,2104,6218,7902,8402]</code>. This is where gateway latency lives (step 2 → step 3).</td></tr>
+        <tr><td><code>LVL</code></td><td>MDB level in force, 1&ndash;3</td></tr>
+      </tbody>
+    </table></div>
+    <p>
+      <code class="cmd">OUT</code> exists alongside the bits on purpose. The bits say <em>what
+      happened</em>; <code class="cmd">OUT</code> says <em>what it means commercially</em>, and the
+      two are not derivable from each other — a declined card and a jammed motor both leave
+      <code class="cmd">SUCC</code> clear, but only one of them owes the customer money.
+    </p>
+
+    <h3>A completed sale</h3>
+    <pre class="code">{
+  <span class="k">"VEND"</span>: <span class="n">63</span>,          <span class="c">// 1+2+4+8+16+32 - every step</span>
+  <span class="k">"MSK"</span>:  <span class="n">63</span>,
+  <span class="k">"OUT"</span>:  <span class="s">"DISPENSED"</span>,
+  <span class="k">"AMT"</span>:  <span class="n">3.75</span>,
+  <span class="k">"MIN"</span>:  <span class="n">375</span>,
+  <span class="k">"SLOT"</span>: <span class="n">1</span>,
+  <span class="k">"LVL"</span>:  <span class="n">2</span>,
+  <span class="k">"TS"</span>:   <span class="n">1756312836682</span>,
+  <span class="k">"DUR"</span>:  <span class="n">8420</span>,
+  <span class="k">"MS"</span>:   [<span class="n">0</span>,<span class="n">312</span>,<span class="n">2104</span>,<span class="n">6218</span>,<span class="n">7902</span>,<span class="n">8402</span>]
+}</pre>
+
+    <h3>Every other outcome, as numbers</h3>
+    <div style="margin: 8px 0 26px;">
+      <div class="outrow">
+        <span class="val"><span class="b">VEND 63</span> <span class="m">/ MSK 63</span></span>
+        <span class="what"><b>Sold.</b> <code>OUT:"DISPENSED"</code>. All six steps ran. <code>(63 &amp; 63) == 63</code> — clean.</span>
+      </div>
+      <div class="outrow">
+        <span class="val"><span class="b">VEND 51</span> <span class="m">/ MSK 51</span></span>
+        <span class="what"><b>Declined.</b> <code>OUT:"DENIED"</code>. <code>APRV</code> and <code>SUCC</code> are clear <em>and</em> excluded from the mask — a decline is a normal outcome, not a fault, so this still checks clean. The session opened, the request came, and it closed properly.</span>
+      </div>
+      <div class="outrow">
+        <span class="val"><span class="b">VEND 55</span> <span class="m">/ MSK 63</span></span>
+        <span class="what"><b>Jam.</b> <code>OUT:"FAILED"</code>. We approved, so success <em>was</em> expected — the mask keeps bit 4 in and the check fails: <code>MSK &amp; ~VEND == 8</code>, precisely <code>SUCC</code>. <span class="flag">This is the money-owed query</span>: the customer paid and got nothing.</span>
+      </div>
+      <div class="outrow">
+        <span class="val"><span class="b">VEND 3</span> <span class="m">/ MSK 63</span></span>
+        <span class="what"><b>App never answered.</b> <code>OUT:"TIMEOUT"</code>. Session began and the request arrived, then nothing. <code>MSK &amp; ~VEND == 60</code> — everything from approval onward is missing, which points at the payment app, not the bus.</span>
+      </div>
+      <div class="outrow">
+        <span class="val"><span class="b">VEND 62</span> <span class="m">/ MSK 62</span></span>
+        <span class="what"><b>Level 3 Always Idle.</b> No session begin exists on this path — the vend request arrives straight in ENABLED — so bit 0 is out of the mask and a perfect sale is 62, not 63.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="hshake">
+    <h2><span class="eyebrow">05 &middot; packet</span><code>HSHAKE</code> — coming up on the bus</h2>
+    <p>
+      One packet per setup handshake: from the machine's RESET to the device being live. Eight steps,
+      so a whole handshake fits in one byte. This is the packet that says whether a freshly
+      installed terminal actually joined the bus.
+    </p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Step</th><th>Bit</th><th>Value</th><th>Key</th><th>Means</th><th>L1</th><th>L2</th><th>L3</th></tr></thead>
+      <tbody>
+        <tr><td class="bit">1</td><td class="bit">0</td><td class="num">1</td><td><code>RST</code></td><td>RESET received, ACKed</td><td class="bit">&#10003;</td><td class="bit">&#10003;</td><td class="bit">&#10003;</td></tr>
+        <tr><td class="bit">2</td><td class="bit">1</td><td class="num">2</td><td><code>JRST</code></td><td>JUST RESET announced on a poll</td><td class="bit">&#10003;</td><td class="bit">&#10003;</td><td class="bit">&#10003;</td></tr>
+        <tr><td class="bit">3</td><td class="bit">2</td><td class="num">4</td><td><code>SCFG</code></td><td>Setup config answered with reader config data</td><td class="bit">&#10003;</td><td class="bit">&#10003;</td><td class="bit">&#10003;</td></tr>
+        <tr><td class="bit">4</td><td class="bit">3</td><td class="num">8</td><td><code>SMAX</code></td><td>Setup max/min prices ACKed</td><td class="bit">&#10003;</td><td class="bit">&#10003;</td><td class="bit">&#10003;</td></tr>
+        <tr class="na"><td class="bit">5</td><td class="bit">4</td><td class="num">16</td><td><code>XREQ</code></td><td>Expansion request ID answered with peripheral ID</td><td class="bit">&mdash;</td><td class="bit">&#10003;</td><td class="bit">&#10003;</td></tr>
+        <tr class="na"><td class="bit">6</td><td class="bit">5</td><td class="num">32</td><td><code>XOPT</code></td><td>Expansion enable options ACKed</td><td class="bit">&mdash;</td><td class="bit">&mdash;</td><td class="bit">&#10003;</td></tr>
+        <tr><td class="bit">7</td><td class="bit">6</td><td class="num">64</td><td><code>REN</code></td><td>Reader enable ACKed</td><td class="bit">&#10003;</td><td class="bit">&#10003;</td><td class="bit">&#10003;</td></tr>
+        <tr><td class="bit">8</td><td class="bit">7</td><td class="num">128</td><td><code>LIVE</code></td><td>First poll answered while enabled — bus proven alive</td><td class="bit">&#10003;</td><td class="bit">&#10003;</td><td class="bit">&#10003;</td></tr>
+      </tbody>
+    </table></div>
+    <p>
+      The level decides the mask, and nothing else: <code class="cmd">MSK 207</code> at Level 1
+      (no expansion commands exist), <code class="cmd">223</code> at Level 2,
+      <code class="cmd">255</code> at Level 3.
+    </p>
+    <pre class="code">{
+  <span class="k">"HSHAKE"</span>: <span class="n">223</span>,        <span class="c">// every step this level has</span>
+  <span class="k">"MSK"</span>:    <span class="n">223</span>,        <span class="c">// Level 2: XOPT (32) is not expected</span>
+  <span class="k">"RES"</span>:    <span class="s">"OK"</span>,         <span class="c">// OK | STALL | RESET</span>
+  <span class="k">"LVL"</span>:    <span class="n">2</span>,
+  <span class="k">"RTY"</span>:    <span class="n">1</span>,          <span class="c">// setup commands the machine resent and we re-answered</span>
+  <span class="k">"UNH"</span>:    <span class="n">0</span>,          <span class="c">// commands addressed to us we could not answer</span>
+  <span class="k">"TS"</span>:     <span class="n">1756312834220</span>,
+  <span class="k">"DUR"</span>:    <span class="n">950</span>,
+  <span class="k">"MS"</span>:     [<span class="n">0</span>,<span class="n">3</span>,<span class="n">106</span>,<span class="n">332</span>,<span class="n">230</span>,<span class="n">0</span>,<span class="n">443</span>,<span class="n">950</span>]
+}</pre>
+    <div style="margin: 8px 0 26px;">
+      <div class="outrow">
+        <span class="val"><span class="b">HSHAKE 207</span> <span class="m">/ MSK 207</span></span>
+        <span class="what"><b>Level 1, healthy.</b> No expansion commands at L1, so 16 and 32 are out of the mask.</span>
+      </div>
+      <div class="outrow">
+        <span class="val"><span class="b">HSHAKE 223</span> <span class="m">/ MSK 223</span></span>
+        <span class="what"><b>Level 2, healthy.</b> Only enable options is out.</span>
+      </div>
+      <div class="outrow">
+        <span class="val"><span class="b">HSHAKE 255</span> <span class="m">/ MSK 255</span></span>
+        <span class="what"><b>Level 3, healthy.</b> Every step applies — a full byte.</span>
+      </div>
+      <div class="outrow">
+        <span class="val"><span class="b">HSHAKE 31</span> <span class="m">/ MSK 223</span></span>
+        <span class="what"><b>Level 2, stalled.</b> <code>RES:"STALL"</code>. Setup finished, then reader enable never came: <code>MSK &amp; ~HSHAKE == 192</code> — <code>REN</code> and <code>LIVE</code>. <span class="flag">The machine is not enabling the reader</span>, which is a machine-side or config problem, and the number says so without anyone opening a log.</span>
+      </div>
+    </div>
+    <div class="callout warn">
+      <p>
+        <strong>Note the <code class="cmd">MS</code> array above is not ascending</strong> —
+        step 5 sits at 230&nbsp;ms while step 4 sits at 332&nbsp;ms. That is a real trace from your
+        machine: it sends setup max/min <em>after</em> expansion request ID, so a setup command
+        lands when the device is already in DISABLED (which is what
+        <code class="cmd">RTY:1</code> records). The bits stay in schema order and
+        <code class="cmd">MS</code> tells the truth about sequence, which is what lets one schema
+        describe machines that disagree about their own handshake order. Steps that never happened
+        carry <code class="cmd">0</code>.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="auto">
+    <h2><span class="eyebrow">06 &middot; the volume rule</span>Auto-session: no customer, no packet</h2>
+    <p>
+      In auto-session mode the device opens a session the moment the reader is enabled, and re-arms
+      after every close. A machine sitting idle overnight therefore opens and closes thousands of
+      sessions in which <em>nothing happens</em>. Emitting packets for session begin, session
+      complete and end session on their own would bury the real transactions and waste the broker.
+    </p>
+    <p>So the VEND buffer is <strong>speculative</strong>:</p>
+    <ol>
+      <li>Session begin sets bit 0 in a buffer held in memory. Nothing is published.</li>
+      <li>If a vend request arrives, the buffer is <strong>promoted</strong> to a real packet — bit 0
+      included, since it genuinely happened — and published when the session closes.</li>
+      <li>If the session closes with no vend request, the buffer is <strong>discarded</strong> and
+      only a counter increments.</li>
+    </ol>
+    <div class="callout">
+      <p>
+        <strong>Discarded is not invisible.</strong> Every suppressed session is counted in the
+        <code class="cmd">STAT</code> rollup as <code class="cmd">IDLE</code>. Silently dropping them
+        would make "quiet machine" and "dead machine" look identical — zero sales with 400 idle
+        sessions is a healthy machine, while zero sales and zero idle sessions is one to go look at.
+      </p>
+    </div>
+    <p>
+      Manual mode follows the same rule: a session with no vend request produces no packet. The rule
+      is about whether a customer transacted, not about which mode opened the session.
+    </p>
+
+    <figure>
+      <svg viewBox="0 0 940 430" role="img" aria-label="Diagram of the packet pipeline. The bus thread receives commands and sends responses, and pushes typed events onto the offload queue. The offload thread has two consumers: the existing report function which publishes human log lines to the liveLog topic, and the new packet builder. The packet builder holds one handshake buffer and one speculative vend buffer plus a ring buffer of recent packets. A vend buffer that sees a vend request is promoted and published to the packets topic; a vend buffer with no vend request is discarded and counted in the stat rollup. Published packets go through the shared MQTT outbound queue and publisher thread to the broker, where the dashboard subscribes to liveLog and a backend subscribes to packets.">
+        <defs>
+          <marker id="pa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+          <marker id="paA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+          </marker>
+          <marker id="paE" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--err)"/>
+          </marker>
+        </defs>
+
+        <rect x="16" y="150" width="120" height="72" rx="9" fill="var(--surface)" stroke="currentColor" stroke-width="1.3"/>
+        <text x="76" y="178" text-anchor="middle" font-size="11.5" font-weight="700" fill="currentColor">Bus thread</text>
+        <text x="76" y="194" text-anchor="middle" font-size="9" fill="var(--muted)">recv / dispatch</text>
+        <text x="76" y="207" text-anchor="middle" font-size="9" fill="var(--muted)">/ send only</text>
+
+        <rect x="176" y="150" width="104" height="72" rx="9" fill="var(--surface-2)" stroke="currentColor" opacity="0.9"/>
+        <text x="228" y="180" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">offload</text>
+        <text x="228" y="196" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">queue</text>
+        <text x="228" y="211" text-anchor="middle" font-size="8.5" fill="var(--muted)">typed events</text>
+
+        <line x1="136" y1="186" x2="174" y2="186" stroke="currentColor" marker-end="url(#pa)"/>
+
+        <rect x="316" y="34" width="180" height="58" rx="9" fill="var(--surface)" stroke="currentColor" opacity="0.9"/>
+        <text x="406" y="58" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">report() &mdash; unchanged</text>
+        <text x="406" y="75" text-anchor="middle" font-size="9" fill="var(--muted)">human log lines, with the hex</text>
+
+        <rect x="316" y="122" width="290" height="240" rx="10" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.4"/>
+        <text x="461" y="148" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent)">PacketBuilder (new)</text>
+        <text x="461" y="164" text-anchor="middle" font-size="9" fill="var(--muted)">runs on the offload thread &mdash; never the bus thread</text>
+
+        <rect x="336" y="178" width="118" height="56" rx="7" fill="var(--surface)" stroke="currentColor" opacity="0.85"/>
+        <text x="395" y="200" text-anchor="middle" font-size="10" font-weight="600" fill="currentColor">HSHAKE</text>
+        <text x="395" y="215" text-anchor="middle" font-size="8.5" fill="var(--muted)">bits &amp; mask</text>
+
+        <rect x="470" y="178" width="118" height="56" rx="7" fill="var(--surface)" stroke="var(--warn)" stroke-width="1.2"/>
+        <text x="529" y="196" text-anchor="middle" font-size="10" font-weight="600" fill="var(--warn)">VEND</text>
+        <text x="529" y="210" text-anchor="middle" font-size="8.5" fill="var(--muted)">bits &amp; mask</text>
+        <text x="529" y="223" text-anchor="middle" font-size="8.5" fill="var(--muted)">speculative</text>
+
+        <rect x="336" y="252" width="252" height="42" rx="7" fill="var(--surface)" stroke="currentColor" opacity="0.7"/>
+        <text x="462" y="269" text-anchor="middle" font-size="10" font-weight="600" fill="currentColor">ring buffer &mdash; last 20 packets</text>
+        <text x="462" y="284" text-anchor="middle" font-size="8.5" fill="var(--muted)">replayable on request, survives a broker outage</text>
+
+        <rect x="336" y="308" width="252" height="40" rx="7" fill="none" stroke="var(--err)" stroke-dasharray="4 3"/>
+        <text x="462" y="325" text-anchor="middle" font-size="10" font-weight="600" fill="var(--err)">no vend request &rarr; discard</text>
+        <text x="462" y="339" text-anchor="middle" font-size="8.5" fill="var(--muted)">counted as STAT.IDLE, never published</text>
+
+        <line x1="529" y1="236" x2="480" y2="306" stroke="var(--err)" stroke-dasharray="4 3" marker-end="url(#paE)"/>
+
+        <line x1="280" y1="170" x2="314" y2="80" stroke="currentColor" marker-end="url(#pa)"/>
+        <line x1="280" y1="196" x2="314" y2="210" stroke="var(--accent)" marker-end="url(#paA)"/>
+
+        <rect x="656" y="140" width="130" height="72" rx="9" fill="var(--ok-soft)" stroke="var(--ok)" stroke-width="1.3"/>
+        <text x="721" y="168" text-anchor="middle" font-size="11" font-weight="700" fill="var(--ok)">MqttLib queue</text>
+        <text x="721" y="184" text-anchor="middle" font-size="8.5" fill="var(--muted)">+ publisher thread</text>
+        <text x="721" y="198" text-anchor="middle" font-size="8.5" fill="var(--muted)">the only socket writer</text>
+
+        <line x1="496" y1="60" x2="654" y2="150" stroke="currentColor" marker-end="url(#pa)"/>
+        <text x="580" y="96" text-anchor="middle" font-size="8.5" fill="var(--muted)">enqueue(line)</text>
+
+        <line x1="606" y1="206" x2="654" y2="184" stroke="var(--accent)" marker-end="url(#paA)"/>
+        <text x="628" y="222" text-anchor="middle" font-size="8.5" fill="var(--accent)">enqueue("packets", json)</text>
+
+        <rect x="836" y="60" width="94" height="52" rx="8" fill="none" stroke="currentColor" opacity="0.6"/>
+        <text x="883" y="82" text-anchor="middle" font-size="10" font-weight="600" fill="currentColor">dashboard</text>
+        <text x="883" y="97" text-anchor="middle" font-size="8.5" fill="var(--muted)">liveLog</text>
+
+        <rect x="836" y="240" width="94" height="52" rx="8" fill="var(--surface)" stroke="var(--accent)"/>
+        <text x="883" y="262" text-anchor="middle" font-size="10" font-weight="600" fill="var(--accent)">backend</text>
+        <text x="883" y="277" text-anchor="middle" font-size="8.5" fill="var(--muted)">packets</text>
+
+        <line x1="786" y1="160" x2="834" y2="104" stroke="currentColor" marker-end="url(#pa)"/>
+        <line x1="786" y1="192" x2="834" y2="248" stroke="var(--accent)" marker-end="url(#paA)"/>
+
+        <text x="470" y="404" text-anchor="middle" font-size="10" fill="var(--muted)" font-style="italic">Packet assembly costs the bus nothing: the bus thread only queues an event, exactly as it already does for log lines.</text>
+      </svg>
+      <figcaption>
+        The builder is a second consumer of the offload queue that already exists — so the
+        millisecond-critical bus loop is untouched by any of this.
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="stat">
+    <h2><span class="eyebrow">07 &middot; packet</span><code>STAT</code> — the rollup</h2>
+    <p>
+      One packet per window, and the only packet a healthy idle machine ever sends. Its value is the
+      window length in ms, so the key still both names the packet and carries something useful.
+    </p>
+    <pre class="code">{
+  <span class="k">"STAT"</span>: <span class="n">60000</span>,       <span class="c">// window length in ms</span>
+  <span class="k">"ST"</span>:   <span class="s">"ENABLED"</span>,    <span class="c">// MDB state at window close</span>
+  <span class="k">"SESS"</span>: <span class="n">37</span>,          <span class="c">// sessions opened</span>
+  <span class="k">"IDLE"</span>: <span class="n">36</span>,          <span class="c">// closed with no vend request - suppressed, per the auto-session rule</span>
+  <span class="k">"SALE"</span>: <span class="n">1</span>,           <span class="c">// VEND packets published - reconcile against what you received</span>
+  <span class="k">"POLL"</span>: <span class="n">4318</span>,        <span class="c">// polls answered - the bus-alive number</span>
+  <span class="k">"UNH"</span>:  <span class="n">0</span>,           <span class="c">// commands addressed to us we could not answer</span>
+  <span class="k">"DROP"</span>: <span class="n">0</span>,           <span class="c">// packets lost to queue overflow since boot</span>
+  <span class="k">"TS"</span>:   <span class="n">1756312896000</span>
+}</pre>
+    <p>
+      <code class="cmd">SALE</code> earns its place: with no sequence number anywhere in the scheme,
+      it is the only way a backend can tell "this machine sold nothing" from "I lost the packet".
+      Reconciling <code class="cmd">SALE</code> against received VEND packets is the loss detector.
+    </p>
+    <div class="callout warn">
+      <p>
+        <strong><code class="cmd">UNH</code> is the one to watch.</strong> Every protocol bug found
+        on real machines in this project started as an unhandled command — a rising
+        <code class="cmd">UNH</code> means the field is doing something the engine does not know
+        about yet, and it is visible here without anyone reading a log.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="lifecycle">
+    <h2><span class="eyebrow">08 &middot; when packets open and close</span>Lifecycle rules</h2>
+    <p>
+      A buffer must always close. These rules guarantee every opened buffer is either published or
+      explicitly discarded — a half-finished transaction is data, not something to throw away.
+    </p>
+    <div class="table-wrap"><table>
+      <thead><tr><th></th><th><code>HSHAKE</code></th><th><code>VEND</code></th></tr></thead>
+      <tbody>
+        <tr><td><strong>Opens on</strong></td><td>RESET received, or the first setup command after the port opens</td><td>session begin — or the vend request itself when Always Idle skips it</td></tr>
+        <tr><td><strong>Publishes when</strong></td><td><code>LIVE</code> is set (first poll answered while enabled)</td><td>the session closes — and only if a vend request was seen</td></tr>
+        <tr><td><strong>Discards when</strong></td><td>never</td><td>the session closes with no vend request → <code>STAT.IDLE</code>++</td></tr>
+        <tr><td><strong>On timeout</strong></td><td>no progress for 30 s → publish with <code>RES:"STALL"</code></td><td>no progress for 120 s → publish with <code>OUT:"TIMEOUT"</code></td></tr>
+        <tr><td><strong>On RESET mid-flight</strong></td><td>publish the partial with <code>RES:"RESET"</code>, then open a fresh one</td><td>publish the partial with <code>OUT:"CANCELLED"</code> if a vend request was seen, else discard</td></tr>
+        <tr><td><strong>On port close</strong></td><td>flush the partial, same rules</td><td>flush the partial, same rules</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout err">
+      <p>
+        <strong>A stalled vend is the most valuable packet in the system</strong> and the easiest to
+        lose. If a machine dies mid-transaction and the buffer just sits there, that transaction is
+        never reported — which is exactly the case someone will be asking about. Hence the timeout
+        flush, and hence the ring buffer: a packet that could not be published while the broker was
+        unreachable is still recoverable.
+      </p>
+    </div>
+    <p>
+      The two buffers are independent and at most one of each exists at a time. A VEND buffer open
+      when a RESET arrives is resolved by the rule above before the new HSHAKE buffer opens, so they
+      can never interleave in a way that loses a transaction.
+    </p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="transport">
+    <h2><span class="eyebrow">09 &middot; where it plugs in</span>Transport &amp; control</h2>
+
+    <h3>Topic</h3>
+    <pre class="code">cm30-mdb/hamdan-rabbah/&lt;deviceId&gt;/packets     <span class="c">// new - one JSON packet per message</span>
+cm30-mdb/hamdan-rabbah/&lt;deviceId&gt;/liveLog     <span class="c">// unchanged</span>
+cm30-mdb/hamdan-rabbah/&lt;deviceId&gt;/commands    <span class="c">// unchanged</span></pre>
+    <p>
+      A separate topic, not a tagged line on <code class="cmd">liveLog</code>, for one decisive
+      reason: a backend that wants transactions should be able to subscribe to
+      <code class="cmd">.../+/packets</code> and get a few messages a minute instead of filtering a
+      firehose. It also means the dashboard sees nothing new and cannot break. No new MQTT plumbing
+      is needed either — <code class="cmd">MqttLib.enqueue()</code> already takes a custom topic
+      suffix. The device id is not inside the packet because the topic carries it; store packets
+      with their topic, not detached from it.
+    </p>
+
+    <h3>Queue policy</h3>
+    <ul>
+      <li><strong>Packets ignore <code class="cmd">setMqttLogging(off)</code>.</strong> That switch
+      exists to silence chatter; packets are the opposite of chatter. Muting the log must never stop
+      transaction reporting — they get their own switch.</li>
+      <li><strong>Packets are protected from log-burst eviction.</strong> The outbound queue drops
+      oldest on overflow, and a burst of log lines must not be able to evict a transaction record.
+      Simplest viable approach: a small dedicated queue for packets, drained by the same publisher
+      thread. Worth confirming against the current single-queue implementation before building.</li>
+    </ul>
+
+    <h3>Proposed control surface</h3>
+    <p>Each one available both as an Android function and as a dashboard command, as with everything else in this library:</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Android</th><th>Dashboard command</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>setPacketStream(Boolean)</code></td><td><code>setPacketStream:on|off</code></td><td>Master switch. Default on.</td></tr>
+        <tr><td><code>setPacketTiming(Boolean)</code></td><td><code>setPacketTiming:on|off</code></td><td>Include the <code>MS</code> array. Off shaves the packet to ~110 bytes; on is worth it while commissioning machines.</td></tr>
+        <tr><td><code>setStatWindow(seconds)</code></td><td><code>setStatWindow:60</code></td><td>STAT rollup period. 0 disables STAT.</td></tr>
+        <tr><td><code>lastPackets(n)</code></td><td><code>getPackets:5</code></td><td>Replay the last n from the ring buffer.</td></tr>
+        <tr><td><code>packetListener</code></td><td>&mdash;</td><td>Local callback with the same JSON, so an app can store or forward packets with no MQTT at all.</td></tr>
+      </tbody>
+    </table></div>
+    <p>
+      <code class="cmd">packetListener</code> matters more than it looks: it means the packet scheme
+      is not an MQTT feature. A device with no broker still produces the same records, and the app
+      can ship them over its own channel.
+    </p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="backend">
+    <h2><span class="eyebrow">10 &middot; the payoff</span>What a consumer actually does with this</h2>
+    <p>Every one of these is arithmetic on two integers — no log parsing, no JSON walking:</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Question</th><th>Expression</th></tr></thead>
+      <tbody>
+        <tr><td>Did everything that should happen, happen?</td><td><code>(VEND &amp; MSK) == MSK</code></td></tr>
+        <tr><td>What exactly went missing?</td><td><code>MSK &amp; ~VEND</code> → look up the bit values</td></tr>
+        <tr><td>Money owed back to customers</td><td><code>OUT = 'FAILED'</code>, or <code>(VEND &amp; 4) &amp;&amp; !(VEND &amp; 8)</code> — approved but never dispensed</td></tr>
+        <tr><td>Is this machine even on the bus?</td><td>a <code>HSHAKE</code> where <code>(HSHAKE &amp; MSK) == MSK</code></td></tr>
+        <tr><td>Where do failing terminals get stuck?</td><td>group by <code>MSK &amp; ~HSHAKE</code></td></tr>
+        <tr><td>Which terminals have slow gateways?</td><td><code>MS[2] - MS[1]</code> — vend request to approval</td></tr>
+        <tr><td>Decline rate per machine</td><td><code>OUT = 'DENIED'</code> ÷ all VEND packets</td></tr>
+        <tr><td>Are we losing packets?</td><td><code>STAT.SALE</code> vs VEND packets received</td></tr>
+        <tr><td>Is a quiet machine dead or just idle?</td><td><code>STAT.POLL</code> high with <code>STAT.SALE</code> zero = idle and healthy</td></tr>
+        <tr><td>Is the field doing something we don't handle?</td><td><code>STAT.UNH</code> rising</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Decisions to confirm before this gets built</h3>
+    <ol>
+      <li><strong>Integer or array</strong> for the state field — my recommendation is the integer
+      plus <code class="cmd">MSK</code>, but the array is a one-line change to the builder if you
+      would rather read the packets by eye.</li>
+      <li><strong>Six VEND steps as listed</strong>, matching your sketch. The alternative is
+      splitting step 3 into "app answered" and "answer sent on the wire", which would separate a
+      slow gateway from a slow bus — currently both look the same in the bits, and only
+      <code class="cmd">MS</code> tells them apart.</li>
+      <li><strong><code class="cmd">APRV</code> means specifically "approved"</strong>, so a decline
+      leaves it clear and masks it out. If you would rather the bit meant "we answered, either way",
+      say so — that shifts what a decline looks like from <code class="cmd">51</code> to
+      <code class="cmd">55</code>.</li>
+      <li><strong>Does the dashboard get a packet view</strong>, or is this backend-only for now?
+      Either way the dashboard needs no change.</li>
+    </ol>
+  </section>
+</main>
+
+<footer>
+  CM30 MDB Slave project &mdash; packet scheme design proposal, drafted against app v2.13.4
+  (build 52) / mdb-lib 6.4.1. Nothing here is implemented yet: the bit tables and key names are the
+  contract to agree on first. Companion docs: the architecture reference, the developer manual, and
+  the interactive vend simulator.
+</footer>

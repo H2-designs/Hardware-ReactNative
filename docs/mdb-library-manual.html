@@ -1,0 +1,533 @@
+<title>MDB Library Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f4ef; --surface: #ffffff; --surface-2: #eeece4; --border: #ddd8cc;
+    --text: #262320; --muted: #6f6a60;
+    --accent: #0d7fa6; --accent-soft: rgba(13,127,166,0.10);
+    --ok: #1f8a4c; --ok-soft: rgba(31,138,76,0.10);
+    --warn: #a8710a; --warn-soft: rgba(168,113,10,0.12);
+    --err: #b23b3b; --err-soft: rgba(178,59,59,0.10);
+    --mono-chip: #efece2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b0e12; --surface: #12161c; --surface-2: #171d25; --border: #232a33;
+      --text: #d7e0ea; --muted: #8ea0b5;
+      --accent: #35c7ff; --accent-soft: rgba(53,199,255,0.12);
+      --ok: #6fe89a; --ok-soft: rgba(111,232,154,0.10);
+      --warn: #e8c766; --warn-soft: rgba(232,199,102,0.12);
+      --err: #e86f6f; --err-soft: rgba(232,111,111,0.10);
+      --mono-chip: #1a2029;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0e12; --surface: #12161c; --surface-2: #171d25; --border: #232a33;
+    --text: #d7e0ea; --muted: #8ea0b5;
+    --accent: #35c7ff; --accent-soft: rgba(53,199,255,0.12);
+    --ok: #6fe89a; --ok-soft: rgba(111,232,154,0.10);
+    --warn: #e8c766; --warn-soft: rgba(232,199,102,0.12);
+    --err: #e86f6f; --err-soft: rgba(232,111,111,0.10);
+    --mono-chip: #1a2029;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, Segoe UI, sans-serif; line-height: 1.6;
+  }
+  ::selection { background: var(--accent-soft); }
+  code, .mono { font-family: 'IBM Plex Mono', Consolas, monospace; }
+
+  header.top {
+    position: sticky; top: 0; z-index: 10; background: var(--surface);
+    border-bottom: 1px solid var(--border); padding: 14px 24px;
+    display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap;
+  }
+  header.top .title { font-weight: 700; font-size: 15px; letter-spacing: 0.01em; }
+  header.top nav { display: flex; gap: 14px; flex-wrap: wrap; }
+  header.top nav a {
+    color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500;
+    border-bottom: 1px solid transparent; padding-bottom: 2px;
+  }
+  header.top nav a:hover, header.top nav a:focus-visible { color: var(--accent); border-bottom-color: var(--accent); }
+
+  main { max-width: 880px; margin: 0 auto; padding: 44px 24px 96px; }
+  h1 { font-size: 29px; font-weight: 700; text-wrap: balance; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); font-size: 16px; max-width: 66ch; margin: 0 0 40px; }
+  h2 {
+    font-size: 21px; font-weight: 700; margin: 60px 0 6px; padding-top: 8px;
+    letter-spacing: -0.005em; scroll-margin-top: 70px;
+  }
+  h2 .eyebrow {
+    display: block; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500;
+    color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px;
+  }
+  h3 { font-size: 15.5px; font-weight: 600; margin: 30px 0 8px; }
+  h3 code { background: var(--mono-chip); padding: 2px 8px; border-radius: 5px; font-size: 14px; }
+  p { margin: 0 0 14px; max-width: 72ch; }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 5px; max-width: 68ch; }
+  strong { font-weight: 600; }
+
+  .cmd {
+    font-family: 'IBM Plex Mono', monospace; background: var(--mono-chip);
+    padding: 1px 6px; border-radius: 4px; font-size: 0.92em; white-space: nowrap;
+  }
+
+  .callout {
+    border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    background: var(--surface); border-radius: 0 8px 8px 0;
+    padding: 13px 17px; margin: 18px 0; font-size: 14.5px;
+  }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.ok { border-left-color: var(--ok); }
+  .callout.err { border-left-color: var(--err); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  pre.code {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 15px 17px; overflow-x: auto; font-size: 12.5px; line-height: 1.6;
+    font-family: 'IBM Plex Mono', monospace; margin: 12px 0 24px;
+  }
+  pre.code .k { color: var(--accent); }
+  pre.code .c { color: var(--muted); font-style: italic; }
+  pre.code .s { color: var(--ok); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 16px 0 26px; }
+  .table-wrap { overflow-x: auto; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+  td.mono, td code { font-family: 'IBM Plex Mono', monospace; }
+  td code { background: var(--mono-chip); padding: 1px 5px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
+
+  footer { max-width: 880px; margin: 0 auto; padding: 0 24px 64px; color: var(--muted); font-size: 13px; }
+</style>
+
+<header class="top">
+  <span class="title">MDB LIBRARY MANUAL</span>
+  <nav>
+    <a href="#start">Getting started</a>
+    <a href="#nomqtt">Without MQTT?</a>
+    <a href="#lifecycle">Lifecycle</a>
+    <a href="#vend">Vend & payments</a>
+    <a href="#state">State</a>
+    <a href="#settings">Settings</a>
+    <a href="#hex">Hex configs</a>
+    <a href="#mqtt">MqttLib</a>
+    <a href="#remote">Dashboard commands</a>
+    <a href="#tagged">Tagged messages</a>
+  </nav>
+</header>
+
+<main>
+  <h1>Every command, and how it works</h1>
+  <p class="lede">
+    The complete developer manual for <code class="cmd">mdb-lib</code> and
+    <code class="cmd">mqtt-lib</code>: every function with a working example, every dashboard
+    command, and what actually happens inside when you call each one. Current as of
+    mdb-lib&nbsp;6.4.1 / mqtt-lib&nbsp;1.1.0.
+  </p>
+
+  <!-- ============================================================ -->
+  <section id="start">
+    <h2><span class="eyebrow">01</span>Getting started</h2>
+    <p>Add the AARs (or the Gradle modules) and initialize once at app startup:</p>
+    <pre class="code"><span class="c">// build.gradle (raw AARs; skip if using the Gradle modules directly)</span>
+implementation files(<span class="s">'libs/mqtt-lib-1.1.0.aar'</span>)
+implementation files(<span class="s">'libs/mdb-lib-6.4.1.aar'</span>)
+implementation files(<span class="s">'libs/CM30-HardwareLibrary-1.0.9.aar'</span>)  <span class="c">// mdb-lib's hardware runtime</span></pre>
+
+    <pre class="code"><span class="c">// In your Application class or first Activity - the whole startup:</span>
+<span class="k">val</span> deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+    .takeLast(<span class="s">6</span>).uppercase()          <span class="c">// stable per device, no permission needed</span>
+
+MqttLib.init(MqttConfig(topicPrefix = <span class="s">"cm30-mdb/hamdan-rabbah"</span>, deviceId = deviceId))
+MqttLib.start()                          <span class="c">// connect + reconnect loop + publisher thread</span>
+MdbLib.init(applicationContext)          <span class="c">// persistence + auto-registers its command listener</span>
+MdbLib.start()                           <span class="c">// open the MDB port + worker loop</span>
+<span class="c">// From here: all MDB data streams to the dashboard, all remote commands work.</span></pre>
+
+    <ul>
+      <li><strong>Order matters, gently:</strong> call <code class="cmd">MqttLib.init()</code>
+      before <code class="cmd">MdbLib.init()</code> if you want the dashboard link — MdbLib
+      registers its command listener during its own init. (Skipping MQTT completely is also
+      fine — see the next section.)</li>
+      <li><strong><code class="cmd">applicationContext</code></strong> is the app-lifetime Android
+      Context — the library needs it only for SharedPreferences. Passing an Activity works too
+      (the library unwraps it), but the application context is the clean form.</li>
+      <li><strong><code class="cmd">topicPrefix</code> must match the dashboard's</strong>
+      (log-viewer.html uses <code class="cmd">cm30-mdb/hamdan-rabbah</code>), or the dashboard
+      sees nothing.</li>
+    </ul>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="nomqtt">
+    <h2><span class="eyebrow">02</span>What if I never initialize MQTT — does everything break?</h2>
+    <p><strong>No. MDB runs fully offline.</strong> This was a real bug found while writing this
+    manual — before mqtt-lib&nbsp;1.1.0, skipping <code class="cmd">MqttLib.init()</code> made
+    <code class="cmd">MdbLib.init()</code> crash on an uninitialized topic. Fixed: every MQTT
+    call is now safe in every order.</p>
+
+    <div class="table-wrap"><table>
+      <thead><tr><th>You skipped MQTT and…</th><th>What happens now</th></tr></thead>
+      <tbody>
+        <tr><td><code>MdbLib.init()</code> / <code>start()</code></td><td>Works fully. Bus handshake, vend flow, VendListener, logListener, statusListener, settings, hex configs — all normal.</td></tr>
+        <tr><td>The engine tries to publish logs / status / acks</td><td>Each <code>enqueue()</code> is a <strong>silent no-op</strong>. Nothing thrown, nothing lost locally — only the remote log is absent.</td></tr>
+        <tr><td>Dashboard remote commands</td><td>Don't arrive (there's no connection) — use the equivalent Android functions instead; every command has one.</td></tr>
+        <tr><td><code>MqttLib.enqueue("...")</code> from your own code</td><td>Silent no-op.</td></tr>
+        <tr><td><code>MqttLib.start()</code> without <code>init()</code></td><td>The one deliberate error: throws <code>IllegalStateException("MqttLib.init(config) must be called before start()")</code> — a clear message at the exact mistake, not a mystery crash later.</td></tr>
+        <tr><td>You call <code>MqttLib.init()+start()</code> LATER</td><td>The link simply comes up then. Messages enqueued before init are gone (they were no-ops); everything from that moment flows normally.</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="callout ok">
+      <p><strong>Rule of thumb:</strong> MQTT is the optional half. mdb-lib never requires it to
+      vend — it only uses it when it's there. The only hard requirement is
+      <code class="cmd">MdbLib.init(context)</code> before <code class="cmd">MdbLib.start()</code>
+      (the engine needs its persisted settings and payloads loaded before touching the bus).</p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="lifecycle">
+    <h2><span class="eyebrow">03</span>Lifecycle functions</h2>
+
+    <h3><code>MqttLib.init(config: MqttConfig)</code></h3>
+    <p>Stores the config and derives the two topics:
+    <code class="cmd">&lt;prefix&gt;/&lt;deviceId&gt;/liveLog</code> (out) and
+    <code class="cmd">…/commands</code> (in). No network yet.</p>
+
+    <h3><code>MqttLib.start()</code> / <code>MqttLib.stop()</code></h3>
+    <p><code class="cmd">start()</code> launches two threads: the connect/reconnect loop (retries
+    every 3 s forever) and the single publisher thread that drains the queue. It never blocks
+    your caller and never fails because the broker is down — it just keeps retrying.
+    <code class="cmd">stop()</code> closes the socket and parks both threads.</p>
+
+    <h3><code>MdbLib.init(context: Context)</code></h3>
+    <p>Loads persisted settings and hex payloads from SharedPreferences, and registers the MDB
+    command listener on MqttLib (if MQTT is initialized, now or never — both fine). Idempotent:
+    calling twice does nothing the second time.</p>
+
+    <h3><code>MdbLib.start()</code> / <code>MdbLib.stop()</code></h3>
+    <p><code class="cmd">start()</code> opens the CM30 MDB port and starts the worker loop that
+    answers the VMC. All engine state resets to INACTIVE and the status is announced
+    immediately. <code class="cmd">stop()</code> closes the port, resets to INACTIVE, and
+    announces that too — the dashboard's status bar flips instantly, not on the next heartbeat.</p>
+
+    <pre class="code"><span class="c">// Dashboard equivalents:  open  /  close</span>
+MdbLib.start()
+MdbLib.stop()</pre>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="vend">
+    <h2><span class="eyebrow">04</span>Vend actions & the payment flow</h2>
+
+    <h3><code>MdbLib.vendListener</code> — the payment hook</h3>
+    <p>Four typed callbacks; override only what you need. All fire on a dedicated callback thread
+    (never the bus thread itself — the bus loop only queues the event and goes straight back to
+    answering the VMC, so even a slow callback can't make a response miss the machine's
+    few-millisecond reply window). Still <strong>return promptly and do gateway work on your own
+    coroutine/thread</strong>: the same queue also delivers log lines and status updates.
+    Exceptions you throw are caught and logged, never fatal. The engine keeps ACKing the VMC's
+    polls while your gateway call is in flight (the spec's delayed-response pattern), so a few
+    seconds of latency costs nothing on the bus.</p>
+
+    <pre class="code"><span class="c">// The complete payment integration:</span>
+MdbLib.setCancelMode(MdbLib.CancelResponse.VEND_DENIED)   <span class="c">// once ever - persisted</span>
+
+MdbLib.vendListener = <span class="k">object</span> : MdbLib.VendListener {
+
+    <span class="k">override fun</span> onVendRequest(amount: Double, minorUnits: Int, itemNumber: Int) {
+        <span class="c">// amount = 3.5 (decimal, for display); minorUnits = 350 (EXACT integer</span>
+        <span class="c">// halalas - use this for the gateway and all money math). The library</span>
+        <span class="c">// already applied the scale factor. itemNumber = raw code, -1 if omitted.</span>
+        scope.launch {
+            <span class="k">val</span> ok = paymentGateway.authorize(minorUnits)  <span class="c">// HOLD the money, don't take it</span>
+            <span class="k">if</span> (ok) MdbLib.approveVend()                   <span class="c">// VEND APPROVED on next POLL</span>
+            <span class="k">else</span>    MdbLib.cancelVend()                    <span class="c">// standing cancel response</span>
+        }
+    }
+
+    <span class="k">override fun</span> onVendSuccess(itemNumber: Int) {
+        <span class="c">// MACHINE-side fact: the product physically dropped. NOW take the money.</span>
+        scope.launch { paymentGateway.capture() }
+    }
+
+    <span class="k">override fun</span> onVendFailure() {
+        <span class="c">// MACHINE-side fact: jam/empty - customer got nothing. Give the money back.</span>
+        scope.launch { paymentGateway.refundOrVoid() }
+    }
+
+    <span class="k">override fun</span> onSessionEnded() {
+        <span class="c">// Fires after EVERY session (sale, decline, jam, cancel, walk-away).</span>
+        <span class="c">// Cleanup only - never money decisions (you can't tell WHY it ended here).</span>
+        clearTransactionState(); resetUiToIdle()
+    }
+}</pre>
+
+    <div class="callout">
+      <p><strong>Why authorize/capture split:</strong> your approval is only permission — the
+      machine then physically tries to dispense, and only IT knows if the customer is holding
+      the product. <code class="cmd">onVendSuccess</code>/<code class="cmd">onVendFailure</code>
+      are the machine reporting that physical outcome. Capturing on success (not on approval)
+      means a jammed machine never takes anyone's money.</p>
+    </div>
+
+    <h3>The price arrives ready to charge — in two forms, no math needed</h3>
+    <p>On the MDB wire, prices are raw scaled units (a SAR 3.50 item travels as
+    <code class="cmd">350</code>). The library converts BEFORE calling you, using bytes 4 and 5
+    of the live READER_CONFIG_DATA — the same values the VMC itself was configured with, so the
+    two sides can never disagree:</p>
+    <ul>
+      <li><strong><code class="cmd">minorUnits: Int</code> = 350</strong> — exact integer
+      halalas/cents, computed with pure integer arithmetic. <strong>Use this for the gateway and
+      any money math</strong>; most gateways take minor units natively, and integers can never
+      carry floating-point error.</li>
+      <li><strong><code class="cmd">amount: Double</code> = 3.5</strong> — the decimal form, for
+      display. Note Double is floating point: 3.50 prints as "3.5" unless you format it
+      (<code class="cmd">String.format("%.2f", amount)</code> → "3.50"), and some values (3.30)
+      aren't exactly representable — fine for showing on screen, wrong for accumulating totals.
+      That's exactly why minorUnits exists.</li>
+    </ul>
+    <p>Standalone converters are also public: <code class="cmd">MdbLib.priceToAmount(raw)</code>
+    and <code class="cmd">MdbLib.priceToMinorUnits(raw)</code>.</p>
+
+    <h3><code>MdbLib.beginSession()</code></h3>
+    <p>Arms BEGIN SESSION for the next POLL — the "card tap". In auto-session mode (default)
+    this is never needed; in manual mode it's the only thing that starts a session. Call it from
+    your NFC/tap detection. <em>Dashboard: <code class="cmd">beginSession</code>.</em></p>
+
+    <h3><code>MdbLib.approveVend(): Boolean</code></h3>
+    <p>Arms VEND APPROVED. Returns <code class="cmd">false</code> (and does nothing) if no VEND
+    REQUEST is actually pending — an early or stale approval can never charge the next
+    customer's selection. One call per vend; the response goes out on the next POLL.
+    <em>Dashboard: <code class="cmd">vendApprove</code>.</em></p>
+
+    <h3><code>MdbLib.cancelVend(): Boolean</code></h3>
+    <p>The simple cancel: aborts the live session on the next POLL, sending the standing
+    response configured once via <code class="cmd">setCancelMode()</code>. Works before OR after
+    a VEND REQUEST (you can abort a session before the customer picks anything). No-op returning
+    <code class="cmd">false</code> if no session is live. One call per cancel.
+    <em>Dashboard: <code class="cmd">cancelVend</code>.</em></p>
+
+    <h3><code>MdbLib.cancelVend(response: CancelResponse): Boolean</code></h3>
+    <p>Same, but sends exactly <code class="cmd">SESSION_CANCEL_REQUEST</code> or
+    <code class="cmd">VEND_DENIED</code> this one time, without touching the standing mode.
+    <em>Dashboard: <code class="cmd">cancelVend:sessionCancel</code> /
+    <code class="cmd">cancelVend:vendDenied</code>.</em></p>
+
+    <h3><code>MdbLib.setCancelMode(mode: CancelResponse)</code></h3>
+    <p>Set ONCE (persisted): what plain <code class="cmd">cancelVend()</code> sends, and how the
+    VMC's own VEND CANCEL (13&nbsp;01) is answered. Different VMCs expect different responses —
+    that's why it's configurable. <em>Dashboard: <code class="cmd">setCancelMode:sessionCancel</code>
+    / <code class="cmd">setCancelMode:vendDenied</code>.</em></p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="state">
+    <h2><span class="eyebrow">05</span>Seeing the MDB state from Android</h2>
+    <pre class="code">MdbLib.currentState      <span class="c">// "INACTIVE_STATE" | "DISABLED_STATE" | "ENABLED_STATE" | "VEND_STATE"</span>
+MdbLib.isSessionActive   <span class="c">// true between BEGIN SESSION and END SESSION - the only window</span>
+                         <span class="c">// where approveVend()/cancelVend() can do anything</span>
+
+MdbLib.statusListener = { json -&gt;
+    <span class="c">// {"state":"VEND_STATE","recentActivity":true}</span>
+    <span class="c">// fires INSTANTLY on every state transition + every 3 s as a heartbeat</span>
+    runOnUiThread { stateBadge.text = JSONObject(json).getString(<span class="s">"state"</span>) }
+}
+
+MdbLib.logListener = { line, showOnScreen -&gt;
+    <span class="c">// every log line the engine reports. showOnScreen == false marks per-poll</span>
+    <span class="c">// noise (idle POLL/ACK, unhandled) - do NOT render those into a growing</span>
+    <span class="c">// text view, that freezes a UI on real hardware. Never re-enqueue these.</span>
+    <span class="k">if</span> (showOnScreen) runOnUiThread { appendToMyLogView(line) }
+}</pre>
+    <p>The four states: <strong>INACTIVE</strong> (port closed / pre-setup handshake),
+    <strong>DISABLED</strong> (configured, waiting for READER ENABLE), <strong>ENABLED</strong>
+    (open for business, waiting for a session), <strong>VEND</strong> (session live: requests,
+    approvals, dispensing).</p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="settings">
+    <h2><span class="eyebrow">06</span>Settings</h2>
+    <p>All persisted in SharedPreferences (survive restarts), all mirrored to the dashboard via
+    <code class="cmd">SETTINGS_JSON:</code> on every change, all settable from either side.</p>
+
+    <h3><code>MdbLib.setAutoSession(enabled: Boolean)</code> · <code>MdbLib.isAutoSession</code></h3>
+    <p><code class="cmd">true</code> (default): sessions begin by themselves on READER ENABLE and
+    after every END SESSION. <code class="cmd">false</code>: only
+    <code class="cmd">beginSession()</code> starts one. Switching mid-session cancels the live
+    session so the new mode applies immediately; switching while merely enabled arms/disarms on
+    the spot. <em>Dashboard: <code class="cmd">setSessionMode:auto|manual</code>.</em></p>
+
+    <h3><code>MdbLib.setMdbLevel(level: Int)</code> — 1, 2, or 3</h3>
+    <p>Changes which setup handshake runs, the feature level reported in READER CONFIG DATA, and
+    which BEGIN SESSION / PERIPHERAL ID payloads are sent. Level 1: shortest, no EXPANSION
+    commands. Level 2: adds EXPANSION REQUEST ID / Peripheral ID. Level 3: adds EXPANSION ENABLE
+    OPTIONS + the 4 optional-feature-bits bytes. Throws on any other value.
+    <em>Dashboard: <code class="cmd">setMdbLevel:1|2|3</code>.</em></p>
+
+    <h3><code>MdbLib.setPollVisibility(show)</code> · <code>setUnhandledVisibility(show)</code></h3>
+    <p>Log-debug toggles: report idle POLL→ACK exchanges / report commands unrecognized in the
+    current state. Off by default (noisy). They never touch the on-device screen path — only
+    what gets reported remotely. <em>Dashboard:
+    <code class="cmd">setPollVisibility:on|off</code>,
+    <code class="cmd">setUnhandledVisibility:on|off</code>.</em></p>
+
+    <h3><code>MdbLib.setMqttLogging(enabled: Boolean)</code> · <code>isMqttLoggingEnabled</code></h3>
+    <p>Master on/off for publishing the engine's <strong>log lines</strong> over MQTT. Persisted.
+    While OFF: the local <code class="cmd">logListener</code> still gets every line (your
+    on-device log keeps working), and the <strong>control plane keeps publishing</strong> —
+    VMC_STATUS heartbeat, SETTINGS_JSON, CONFIG_JSON, PONG — so the dashboard still sees the
+    device state and can still send commands, including <code class="cmd">setMqttLogging:on</code>
+    to turn the stream back on. Only the log traffic goes quiet (useful to cut broker traffic in
+    production, or when many devices share one topic prefix).
+    <em>Dashboard: <code class="cmd">setMqttLogging:on|off</code>.</em></p>
+    <pre class="code">MdbLib.setMqttLogging(<span class="k">false</span>)   <span class="c">// production: quiet the remote log stream</span>
+MdbLib.setMqttLogging(<span class="k">true</span>)    <span class="c">// debugging session: stream everything again</span>
+MdbLib.isMqttLoggingEnabled    <span class="c">// current state</span></pre>
+
+    <h3><code>MdbLib.currentSettingsJson(): String</code></h3>
+    <p>Everything above as one JSON string — the same content the
+    <code class="cmd">SETTINGS_JSON:</code> message carries (includes
+    <code class="cmd">mqttLogsEnabled</code>).
+    <em>Dashboard: <code class="cmd">getSettings</code>.</em></p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="hex">
+    <h2><span class="eyebrow">07</span>Hex payload configuration</h2>
+    <p>Every byte the device sends on the bus is editable — from Android code or from the
+    dashboard, hitting the same store. Byte LENGTH is locked per payload (only values change),
+    with one exception: the two BEGIN SESSION payloads accept ANY length from 1 to 35 bytes,
+    because real machines disagree — some feature-level-2 VMCs only accept the short
+    Level-1-style 3-byte form, so you store exactly the bytes your machine wants. Accepted
+    values persist and are used on the very next send, no restart. Every change
+    publishes an ack line (<code class="cmd">[app]</code> or <code class="cmd">[remote]</code>
+    tag shows who did it) plus a fresh <code class="cmd">CONFIG_JSON:</code> snapshot, so the
+    dashboard's Config panel always shows confirmed device state.</p>
+
+    <pre class="code"><span class="c">// read / write / reset - names via constants, never raw strings:</span>
+MdbLib.getConfigHex(MdbLib.ConfigName.SESSION_BEGIN)                <span class="c">// "03 FF FF"</span>
+MdbLib.setConfigHex(MdbLib.ConfigName.SESSION_BEGIN, <span class="s">"03 07 D0"</span>)    <span class="c">// null = ok, else error text</span>
+MdbLib.resetConfig(MdbLib.ConfigName.SESSION_BEGIN)                 <span class="c">// back to library default</span>
+MdbLib.configNames()                                                <span class="c">// all editable names</span>
+MdbLib.configSnapshotJson()                                         <span class="c">// everything as JSON</span>
+
+<span class="c">// BEGIN SESSION length is editable (1-35 bytes) - e.g. a feature-level-2 machine
+// that only accepts the short Level-1-style form:</span>
+MdbLib.setConfigHex(MdbLib.ConfigName.SESSION_BEGIN_L2, <span class="s">"03 FF FF"</span>)   <span class="c">// 3 bytes: accepted</span>
+
+<span class="c">// every other payload stays length-locked - validation is per call, handle the error:</span>
+<span class="k">val</span> err = MdbLib.setConfigHex(MdbLib.ConfigName.VEND_APPROVED, <span class="s">"05 07"</span>)
+<span class="c">// err == "Wrong length for VEND_APPROVED: got 2 byte(s), need 3"</span>
+
+<span class="c">// enable Level 3 "Always Idle" = bit 5 of the LAST feature byte (Z34):</span>
+MdbLib.setConfigHex(MdbLib.ConfigName.READER_CONFIG_INFO_L3,
+    <span class="s">"09 43 41 53 30 30 30 30 30 30 30 30 30 30 30 31 30 30 30 30 30 30 30 30 30 30 30 31 00 01 00 00 00 20"</span>)</pre>
+
+    <div class="table-wrap"><table>
+      <thead><tr><th>MdbLib.ConfigName.…</th><th>Bytes</th><th>Payload</th></tr></thead>
+      <tbody>
+        <tr><td><code>READER_CONFIG_DATA</code></td><td>8</td><td>SETUP response: level, currency, scale factor, decimals, max response time, options. Level byte is overwritten at runtime from setMdbLevel.</td></tr>
+        <tr><td><code>READER_CONFIG_INFO</code></td><td>30</td><td>Peripheral ID (Level 2): 09 + manufacturer×3 + serial×12 + model×12 + sw version×2 (all ASCII except code/version)</td></tr>
+        <tr><td><code>READER_CONFIG_INFO_L3</code></td><td>34</td><td>Peripheral ID (Level 3): same + Z31–Z34 optional-feature bits. Bit 5 of the LAST byte = Always Idle.</td></tr>
+        <tr><td><code>SESSION_BEGIN</code></td><td>1–35 (editable)</td><td>Begin Session (Level 1), default 03 FF FF: 03 + funds hi/lo (FF FF = unknown). Length is freely editable.</td></tr>
+        <tr><td><code>SESSION_BEGIN_L2</code></td><td>1–35 (editable)</td><td>Begin Session (Level 2/3), default 10 bytes: + payment media ID×4 + payment type + payment data×2. Length is freely editable — set "03 FF FF" for machines that want the short form.</td></tr>
+        <tr><td><code>REVALUE_LIMIT</code></td><td>3</td><td>Revalue Limit Amount: 0F + limit hi/lo — sent as-is when the VMC asks REVALUE LIMIT REQUEST (15 01)</td></tr>
+        <tr><td><code>REVALUE_DENIED</code></td><td>1</td><td>Reply to a REVALUE REQUEST (15 00) — default 0E (denied); this device never credits funds onto media</td></tr>
+        <tr><td><code>VEND_APPROVED</code></td><td>3</td><td>05 + price hi/lo — price bytes overwritten at runtime from the actual request</td></tr>
+        <tr><td><code>JUST_RESET</code> / <code>CAN</code> / <code>VEND_DENIED</code> / <code>END_SESSION</code> / <code>SESSION_CANCEL</code></td><td>1</td><td>Single response codes (00 / 08 / 06 / 07 / 04)</td></tr>
+      </tbody>
+    </table></div>
+
+    <p>The checksum is never part of these payloads — the transport computes and appends the
+    MDB CHK byte (8-bit sum) on every send automatically.</p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="mqtt">
+    <h2><span class="eyebrow">08</span>MqttLib for your own use</h2>
+
+    <h3><code>MqttLib.enqueue(payload: String)</code></h3>
+    <p>Your app's logs share the exact pipe MDB uses: one bounded queue (default 1000; overflow
+    drops the OLDEST and counts it), one publisher thread, guaranteed ordering, offline
+    buffering. Never blocks, never does I/O on your thread — safe from anywhere, including the
+    UI thread. No-op if MQTT was never initialized.</p>
+    <pre class="code">MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span>)
+MqttLib.enqueue(<span class="s">"telemetry"</span>, <span class="s">"{\"temp\":41}"</span>)   <span class="c">// custom topic suffix: …/&lt;deviceId&gt;/telemetry</span></pre>
+
+    <h3><code>MqttLib.addCommandListener(listener: (String) -&gt; Boolean)</code></h3>
+    <p>Your own remote commands. Listeners run in registration order on the MQTT reader thread;
+    return <code class="cmd">true</code> to consume and stop the chain. mdb-lib's listener is
+    registered during <code class="cmd">MdbLib.init()</code> and consumes only MDB commands;
+    <code class="cmd">ping</code> is answered (<code class="cmd">PONG</code>) by mqtt-lib itself;
+    anything nobody consumes is reported back as <code class="cmd">unknown command</code>.</p>
+    <pre class="code">MqttLib.addCommandListener { cmd -&gt;
+    <span class="k">when</span> (cmd) {
+        <span class="s">"rebootKiosk"</span> -&gt; { scheduleReboot(); <span class="k">true</span> }
+        <span class="s">"screenshot"</span>  -&gt; { captureAndUpload(); <span class="k">true</span> }
+        <span class="k">else</span> -&gt; <span class="k">false</span>   <span class="c">// not mine - let other listeners see it</span>
+    }
+}</pre>
+
+    <h3>Diagnostics</h3>
+    <pre class="code">MqttLib.isConnected       <span class="c">// broker link up right now? (enqueue works either way)</span>
+MqttLib.droppedMessages   <span class="c">// how many were dropped to queue overflow - rising = offline too long</span></pre>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="remote">
+    <h2><span class="eyebrow">09</span>Dashboard command reference</h2>
+    <p>Everything the dashboard can publish to <code class="cmd">…/&lt;deviceId&gt;/commands</code>.
+    Plain text unless noted. Each row = one message.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Command</th><th>What the device does</th><th>Reply on liveLog</th></tr></thead>
+      <tbody>
+        <tr><td><code>open</code> / <code>close</code></td><td>MdbLib.start() / stop()</td><td>VMC_STATUS immediately</td></tr>
+        <tr><td><code>beginSession</code></td><td>Arms BEGIN SESSION</td><td><code>[remote] begin session requested</code></td></tr>
+        <tr><td><code>vendApprove</code></td><td>approveVend()</td><td>requested / <code>ignored — no VEND REQUEST pending</code></td></tr>
+        <tr><td><code>cancelVend</code></td><td>cancel with the standing mode</td><td>requested (which response) / <code>ignored — no session in progress</code></td></tr>
+        <tr><td><code>cancelVend:sessionCancel</code> / <code>:vendDenied</code></td><td>cancel with that exact response</td><td>same</td></tr>
+        <tr><td><code>setCancelMode:sessionCancel</code> / <code>:vendDenied</code></td><td>sets the standing cancel response</td><td>ack + SETTINGS_JSON</td></tr>
+        <tr><td><code>setSessionMode:auto</code> / <code>:manual</code></td><td>setAutoSession(true/false)</td><td>ack + SETTINGS_JSON</td></tr>
+        <tr><td><code>setMdbLevel:1|2|3</code></td><td>setMdbLevel(n)</td><td>ack + SETTINGS_JSON</td></tr>
+        <tr><td><code>setMqttLogging:on|off</code></td><td>mute/unmute the log stream over MQTT (control plane stays active)</td><td>ack + SETTINGS_JSON</td></tr>
+        <tr><td><code>setPollVisibility:on|off</code> / <code>setUnhandledVisibility:on|off</code></td><td>log-debug toggles</td><td>ack + SETTINGS_JSON</td></tr>
+        <tr><td><code>getSettings</code></td><td>—</td><td>SETTINGS_JSON snapshot</td></tr>
+        <tr><td><code>getConfig</code></td><td>—</td><td>CONFIG_JSON snapshot</td></tr>
+        <tr><td><code>setConfig:NAME:hex bytes</code></td><td>set one payload (legacy text form)</td><td>per-name ack + CONFIG_JSON</td></tr>
+        <tr><td><code>resetConfig:NAME</code></td><td>reset one payload to default</td><td>ack + CONFIG_JSON</td></tr>
+        <tr><td><code>{"setConfig": {...}}</code> · <code>{"resetConfig": [...]}</code> · <code>{"getConfig": true}</code></td><td>JSON form — bulk-capable, validated per name, one bad value never blocks the rest</td><td>per-name acks + CONFIG_JSON</td></tr>
+        <tr><td><code>ping</code></td><td>answered by mqtt-lib itself</td><td><code>PONG</code></td></tr>
+        <tr><td><em>anything else</em></td><td>offered to the app's own listeners first</td><td><code>[remote] unknown command: …</code> if nobody consumed it</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="tagged">
+    <h2><span class="eyebrow">10</span>Tagged messages (device → dashboard)</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Prefix</th><th>When</th><th>Payload</th></tr></thead>
+      <tbody>
+        <tr><td><code>VMC_STATUS:</code></td><td>every state transition (instant) + every 3 s heartbeat + on start/stop</td><td><code>{"state":"VEND_STATE","recentActivity":true}</code> — recentActivity = bus traffic within 5 s</td></tr>
+        <tr><td><code>SETTINGS_JSON:</code></td><td>on boot + after every setting change + on getSettings</td><td>sessionBeginMode, vmcCancelMode, showPollTraffic, showUnhandledCmd, mdbLevel</td></tr>
+        <tr><td><code>CONFIG_JSON:</code></td><td>after every config change + on getConfig</td><td>every payload name → current hex string</td></tr>
+        <tr><td><code>PONG</code></td><td>reply to ping</td><td>proves the device end-to-end alive, not just the broker</td></tr>
+        <tr><td><em>(no prefix)</em></td><td>continuously</td><td>plain log lines: RX/TX exchanges, acks, app messages via enqueue()</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+</main>
+
+<footer>
+  CM30 MDB Slave project — developer manual. mdb-lib 6.4.1 · mqtt-lib 1.1.0 · demo app v2.13.4
+  (build 52). Companion docs: the architecture reference and the interactive vend simulator.
+</footer>

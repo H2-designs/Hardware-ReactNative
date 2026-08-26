@@ -1,0 +1,809 @@
+<title>MDB Library Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --surface: #ffffff;
+    --surface-2: #eeece4;
+    --border: #ddd8cc;
+    --text: #262320;
+    --muted: #6f6a60;
+    --accent: #0d7fa6;
+    --accent-soft: rgba(13, 127, 166, 0.10);
+    --ok: #1f8a4c;
+    --ok-soft: rgba(31, 138, 76, 0.10);
+    --warn: #a8710a;
+    --warn-soft: rgba(168, 113, 10, 0.12);
+    --err: #b23b3b;
+    --mono-chip: #efece2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b0e12;
+      --surface: #12161c;
+      --surface-2: #171d25;
+      --border: #232a33;
+      --text: #d7e0ea;
+      --muted: #8ea0b5;
+      --accent: #35c7ff;
+      --accent-soft: rgba(53, 199, 255, 0.12);
+      --ok: #6fe89a;
+      --ok-soft: rgba(111, 232, 154, 0.10);
+      --warn: #e8c766;
+      --warn-soft: rgba(232, 199, 102, 0.12);
+      --err: #e86f6f;
+      --mono-chip: #1a2029;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0e12;
+    --surface: #12161c;
+    --surface-2: #171d25;
+    --border: #232a33;
+    --text: #d7e0ea;
+    --muted: #8ea0b5;
+    --accent: #35c7ff;
+    --accent-soft: rgba(53, 199, 255, 0.12);
+    --ok: #6fe89a;
+    --ok-soft: rgba(111, 232, 154, 0.10);
+    --warn: #e8c766;
+    --warn-soft: rgba(232, 199, 102, 0.12);
+    --err: #e86f6f;
+    --mono-chip: #1a2029;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, Segoe UI, sans-serif;
+    line-height: 1.6;
+  }
+  ::selection { background: var(--accent-soft); }
+  code, .mono { font-family: 'IBM Plex Mono', 'Cascadia Code', Consolas, monospace; }
+
+  header.top {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex; align-items: baseline; gap: 20px; flex-wrap: wrap;
+  }
+  header.top .title { font-weight: 700; font-size: 15px; letter-spacing: 0.01em; }
+  header.top nav { display: flex; gap: 16px; flex-wrap: wrap; }
+  header.top nav a {
+    color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500;
+    border-bottom: 1px solid transparent; padding-bottom: 2px;
+  }
+  header.top nav a:hover, header.top nav a:focus-visible { color: var(--accent); border-bottom-color: var(--accent); }
+
+  main { max-width: 900px; margin: 0 auto; padding: 48px 24px 96px; }
+  h1 { font-size: 30px; font-weight: 700; text-wrap: balance; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); font-size: 16px; max-width: 64ch; margin: 0 0 48px; }
+  h2 {
+    font-size: 21px; font-weight: 700; margin: 64px 0 6px; padding-top: 8px;
+    letter-spacing: -0.005em; scroll-margin-top: 70px;
+  }
+  h2 .eyebrow {
+    display: block; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500;
+    color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px;
+  }
+  h3 { font-size: 16px; font-weight: 600; margin: 28px 0 10px; }
+  p { margin: 0 0 16px; max-width: 70ch; }
+  ul, ol { margin: 0 0 16px; padding-left: 22px; }
+  li { margin-bottom: 6px; max-width: 66ch; }
+  strong { font-weight: 600; }
+
+  .cmd {
+    font-family: 'IBM Plex Mono', monospace; background: var(--mono-chip);
+    padding: 1px 6px; border-radius: 4px; font-size: 0.92em; white-space: nowrap;
+  }
+
+  figure {
+    margin: 28px 0 32px; padding: 20px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    overflow-x: auto;
+  }
+  figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  figcaption { margin-top: 14px; font-size: 13px; color: var(--muted); text-align: center; }
+
+  .callout {
+    border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    background: var(--surface); border-radius: 0 8px 8px 0;
+    padding: 14px 18px; margin: 20px 0; font-size: 14.5px;
+  }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  pre.code {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto; font-size: 13px; line-height: 1.55;
+    font-family: 'IBM Plex Mono', monospace; margin: 16px 0 28px;
+  }
+  pre.code .k { color: var(--accent); }
+  pre.code .c { color: var(--muted); font-style: italic; }
+  pre.code .s { color: var(--ok); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 20px 0 28px; }
+  .table-wrap { overflow-x: auto; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+  td.mono { font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
+
+  footer { max-width: 900px; margin: 0 auto; padding: 0 24px 64px; color: var(--muted); font-size: 13px; }
+</style>
+
+<header class="top">
+  <span class="title">MDB + MQTT LIBRARIES — AS BUILT</span>
+  <nav>
+    <a href="#modules">Modules</a>
+    <a href="#queue">Outbound queue</a>
+    <a href="#commands">Inbound commands</a>
+    <a href="#config">Config over JSON</a>
+    <a href="#mdbflow">MDB data flow</a>
+    <a href="#vend">Vend listener</a>
+    <a href="#api">Public API</a>
+    <a href="#shipped">What shipped</a>
+  </nav>
+</header>
+
+<main>
+  <h1>The two-library architecture</h1>
+  <p class="lede">
+    Everything proven in the MDB Slave app now lives in two Android libraries —
+    <code class="cmd">mqtt-lib</code> and <code class="cmd">mdb-lib</code> — consumed as AARs.
+    This is the as-built reference: module boundaries, every data flow, the payment-gateway
+    <code class="cmd">VendListener</code>, and the exact public API. The demo app is a ~140-line
+    thin integration of exactly what any Android developer would write.
+  </p>
+
+  <section id="modules">
+    <h2><span class="eyebrow">01 — the boundaries</span>Module & dependency diagram</h2>
+    <p>
+      Two libraries, one demo app. The dependency arrow points one way only:
+      <code class="cmd">mdb-lib</code> uses <code class="cmd">mqtt-lib</code>'s queue to ship its
+      data to the dashboard; <code class="cmd">mqtt-lib</code> has zero knowledge of MDB. The
+      developer's own app depends on both and can use <code class="cmd">mqtt-lib</code>
+      independently (for its own logs) even where MDB isn't involved.
+    </p>
+
+    <figure>
+      <svg viewBox="0 0 900 430" role="img" aria-label="Module diagram: the developer's Android app depends on both mdb-lib and mqtt-lib. mdb-lib depends on mqtt-lib (enqueue only) and bundles the CM30 vendor AAR. mqtt-lib depends on nothing but the Android SDK. Each box lists what it contains and exposes.">
+        <defs>
+          <marker id="marr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <rect x="250" y="20" width="400" height="86" rx="10" fill="var(--surface)" stroke="currentColor" stroke-width="1.3"/>
+        <text x="450" y="48" text-anchor="middle" font-size="14" font-weight="700" fill="currentColor">Developer's Android app</text>
+        <text x="450" y="68" text-anchor="middle" font-size="10.5" fill="var(--muted)">their UI, their business logic, their payment gateway</text>
+        <text x="450" y="86" text-anchor="middle" font-size="10.5" fill="var(--muted)">calls both libraries' public APIs</text>
+
+        <rect x="80" y="180" width="360" height="130" rx="10" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.4"/>
+        <text x="260" y="208" text-anchor="middle" font-size="14" font-weight="700" fill="var(--accent)">mdb-lib (AAR)</text>
+        <text x="260" y="230" text-anchor="middle" font-size="10.5" fill="var(--muted)">MdbLib — state machine, MDB levels 1/2/3</text>
+        <text x="260" y="246" text-anchor="middle" font-size="10.5" fill="var(--muted)">MdbConfigStore — hex payloads, JSON parsing, persistence</text>
+        <text x="260" y="262" text-anchor="middle" font-size="10.5" fill="var(--muted)">MdbSettings — level, session mode, cancel mode</text>
+        <text x="260" y="278" text-anchor="middle" font-size="10.5" fill="var(--muted)">CM30 transport (real hardware; vendor .aar bundled)</text>
+        <text x="260" y="298" text-anchor="middle" font-size="10" fill="var(--accent)">exposes: full control API + vendListener / logListener / statusListener</text>
+
+        <rect x="520" y="180" width="330" height="130" rx="10" fill="var(--ok-soft)" stroke="var(--ok)" stroke-width="1.4"/>
+        <text x="685" y="208" text-anchor="middle" font-size="14" font-weight="700" fill="var(--ok)">mqtt-lib (AAR)</text>
+        <text x="685" y="230" text-anchor="middle" font-size="10.5" fill="var(--muted)">MqttLib — connect, reconnect, subscribe</text>
+        <text x="685" y="246" text-anchor="middle" font-size="10.5" fill="var(--muted)">Outbound QUEUE + single publisher thread</text>
+        <text x="685" y="262" text-anchor="middle" font-size="10.5" fill="var(--muted)">Command listener chain (incoming messages)</text>
+        <text x="685" y="278" text-anchor="middle" font-size="10.5" fill="var(--muted)">No MDB knowledge at all</text>
+        <text x="685" y="298" text-anchor="middle" font-size="10" fill="var(--ok)">exposes: enqueue(), addCommandListener(), start/stop, isConnected</text>
+
+        <rect x="80" y="360" width="360" height="50" rx="10" fill="none" stroke="currentColor" stroke-dasharray="4 3" opacity="0.6"/>
+        <text x="260" y="382" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">CM30 vendor .aar (MdbSlave hardware I/O)</text>
+        <text x="260" y="398" text-anchor="middle" font-size="9.5" fill="var(--muted)">a runtime dependency of mdb-lib — invisible to the app developer's code</text>
+
+        <line x1="330" y1="106" x2="280" y2="178" stroke="currentColor" marker-end="url(#marr)"/>
+        <text x="268" y="140" text-anchor="middle" font-size="9.5" fill="var(--muted)">depends on</text>
+
+        <line x1="570" y1="106" x2="660" y2="178" stroke="currentColor" marker-end="url(#marr)"/>
+        <text x="650" y="140" text-anchor="middle" font-size="9.5" fill="var(--muted)">depends on</text>
+
+        <line x1="440" y1="245" x2="518" y2="245" stroke="var(--accent)" stroke-width="1.4" marker-end="url(#marr)"/>
+        <text x="479" y="235" text-anchor="middle" font-size="9.5" fill="var(--accent)">enqueue() only</text>
+
+        <line x1="260" y1="310" x2="260" y2="358" stroke="currentColor" marker-end="url(#marr)"/>
+      </svg>
+      <figcaption>
+        One-way dependency: mdb-lib → mqtt-lib. The reverse never happens, so mqtt-lib stays
+        reusable for any project. The simulator flavor was removed — this is real-hardware only.
+      </figcaption>
+    </figure>
+
+    <div class="callout">
+      <p>
+        <strong>Why mdb-lib calls the queue directly (instead of the app relaying):</strong> MDB
+        data reaches the dashboard without the app developer writing any glue — install both
+        AARs, call <code class="cmd">init()</code>, done. The engine still exposes local
+        listeners so the app can mirror the same data in its own UI, but the MQTT path works
+        even if the app ignores them.
+      </p>
+    </div>
+  </section>
+
+  <section id="queue">
+    <h2><span class="eyebrow">02 — one door out</span>Outbound queue flow</h2>
+    <p>
+      Everything that leaves the device goes through <strong>one bounded queue</strong> owned by
+      <code class="cmd">mqtt-lib</code>. Producers never touch the socket — they just
+      <code class="cmd">enqueue()</code> and return immediately. One publisher thread is the only
+      consumer, so socket writes are serialized by construction: no races, no thread-per-message,
+      no NetworkOnMainThreadException ever.
+    </p>
+
+    <figure>
+      <svg viewBox="0 0 940 360" role="img" aria-label="Queue flow: three producers — the MDB engine inside mdb-lib, MdbConfigStore acks, and the app developer's own code — all call enqueue() on the bounded outbound queue in mqtt-lib. A single publisher thread drains the queue and writes MQTT PUBLISH packets to the broker, which relays to the dashboard. If the queue is full the oldest message is dropped and a counter increments. While disconnected the queue buffers and drains on reconnect.">
+        <defs>
+          <marker id="qarr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+          <marker id="qarrok" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/>
+          </marker>
+        </defs>
+
+        <rect x="20" y="30" width="200" height="56" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="120" y="53" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--accent)">MdbLib engine (mdb-lib)</text>
+        <text x="120" y="70" text-anchor="middle" font-size="9.5" fill="var(--muted)">RX/TX lines · VMC_STATUS heartbeat</text>
+
+        <rect x="20" y="110" width="200" height="56" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="120" y="133" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--accent)">MdbConfigStore (mdb-lib)</text>
+        <text x="120" y="150" text-anchor="middle" font-size="9.5" fill="var(--muted)">config acks · CONFIG_JSON snapshots</text>
+
+        <rect x="20" y="190" width="200" height="56" rx="8" fill="var(--surface)" stroke="currentColor"/>
+        <text x="120" y="213" text-anchor="middle" font-size="11.5" font-weight="600" fill="currentColor">App developer's code</text>
+        <text x="120" y="230" text-anchor="middle" font-size="9.5" fill="var(--muted)">their own logs, events, telemetry</text>
+
+        <rect x="330" y="90" width="230" height="110" rx="10" fill="var(--ok-soft)" stroke="var(--ok)" stroke-width="1.5"/>
+        <text x="445" y="118" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--ok)">OUTBOUND QUEUE</text>
+        <text x="445" y="137" text-anchor="middle" font-size="9.5" fill="var(--muted)">bounded (default 1000 messages)</text>
+        <text x="445" y="152" text-anchor="middle" font-size="9.5" fill="var(--muted)">full → drop oldest + count drops</text>
+        <text x="445" y="167" text-anchor="middle" font-size="9.5" fill="var(--muted)">buffers while offline,</text>
+        <text x="445" y="180" text-anchor="middle" font-size="9.5" fill="var(--muted)">drains in order on reconnect</text>
+
+        <rect x="620" y="105" width="130" height="80" rx="8" fill="var(--surface)" stroke="var(--ok)"/>
+        <text x="685" y="135" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--ok)">Publisher</text>
+        <text x="685" y="151" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--ok)">thread ×1</text>
+        <text x="685" y="170" text-anchor="middle" font-size="9" fill="var(--muted)">the ONLY socket writer</text>
+
+        <rect x="790" y="60" width="130" height="56" rx="8" fill="none" stroke="currentColor" opacity="0.6"/>
+        <text x="855" y="83" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">MQTT broker</text>
+        <text x="855" y="100" text-anchor="middle" font-size="9" fill="var(--muted)">…/&lt;deviceId&gt;/liveLog</text>
+
+        <rect x="790" y="180" width="130" height="56" rx="8" fill="var(--surface)" stroke="currentColor" opacity="0.9"/>
+        <text x="855" y="203" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">Dashboard</text>
+        <text x="855" y="220" text-anchor="middle" font-size="9" fill="var(--muted)">log-viewer / future UI</text>
+
+        <line x1="220" y1="58" x2="328" y2="115" stroke="var(--accent)" marker-end="url(#qarr)"/>
+        <line x1="220" y1="138" x2="328" y2="142" stroke="var(--accent)" marker-end="url(#qarr)"/>
+        <line x1="220" y1="218" x2="328" y2="170" stroke="currentColor" marker-end="url(#qarr)"/>
+        <text x="272" y="102" text-anchor="middle" font-size="10" font-weight="600" fill="var(--ok)">enqueue()</text>
+        <text x="272" y="200" text-anchor="middle" font-size="10" font-weight="600" fill="var(--ok)">enqueue()</text>
+
+        <line x1="560" y1="145" x2="618" y2="145" stroke="var(--ok)" marker-end="url(#qarrok)"/>
+        <text x="589" y="136" text-anchor="middle" font-size="9" fill="var(--muted)">take()</text>
+
+        <line x1="750" y1="130" x2="788" y2="98" stroke="var(--ok)" marker-end="url(#qarrok)"/>
+        <text x="782" y="126" text-anchor="middle" font-size="9" fill="var(--muted)">PUBLISH</text>
+
+        <line x1="855" y1="116" x2="855" y2="178" stroke="currentColor" marker-end="url(#qarr)"/>
+
+        <text x="470" y="320" text-anchor="middle" font-size="11" fill="var(--muted)" font-style="italic">enqueue() never blocks and never touches the network — safe from any thread, including the UI thread and the MDB worker loop.</text>
+      </svg>
+      <figcaption>
+        Many producers, one queue, one consumer. The MDB engine and the app developer use the
+        exact same <code class="cmd">enqueue()</code> — they never call publish directly, so they
+        can never collide on the socket.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section id="commands">
+    <h2><span class="eyebrow">03 — one door in</span>Inbound command flow</h2>
+    <p>
+      Incoming MQTT messages are dispatched to <strong>registered listeners in order</strong>.
+      <code class="cmd">mdb-lib</code> registers its listener during <code class="cmd">init()</code>
+      and consumes every command it recognizes; the app developer registers their own for their
+      custom commands. A listener returns <code class="cmd">true</code> ("consumed") to stop the
+      chain. <code class="cmd">ping</code> is answered (<code class="cmd">PONG</code>) by mqtt-lib
+      itself before the chain; anything nobody consumes is reported back as unknown. Routing is
+      recognition, not addressing — mqtt-lib never knows what MDB is.
+    </p>
+
+    <figure>
+      <svg viewBox="0 0 940 330" role="img" aria-label="Inbound flow: the dashboard publishes to the commands topic on the broker; mqtt-lib's reader thread receives the message, answers ping itself, and passes everything else through the listener chain — first mdb-lib's auto-registered handler which consumes MDB commands and config JSON, then the app developer's handler for custom commands. Unconsumed messages produce an 'unknown command' log line back through the outbound queue.">
+        <defs>
+          <marker id="carr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <rect x="20" y="40" width="130" height="56" rx="8" fill="var(--surface)" stroke="currentColor" opacity="0.9"/>
+        <text x="85" y="63" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">Dashboard</text>
+        <text x="85" y="80" text-anchor="middle" font-size="9" fill="var(--muted)">…/&lt;deviceId&gt;/commands</text>
+
+        <rect x="210" y="40" width="130" height="56" rx="8" fill="none" stroke="currentColor" opacity="0.6"/>
+        <text x="275" y="63" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">MQTT broker</text>
+
+        <rect x="400" y="30" width="170" height="76" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/>
+        <text x="485" y="55" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--ok)">mqtt-lib reader thread</text>
+        <text x="485" y="73" text-anchor="middle" font-size="9.5" fill="var(--muted)">"ping" → PONG (handled here)</text>
+        <text x="485" y="88" text-anchor="middle" font-size="9.5" fill="var(--muted)">everything else → listener chain</text>
+
+        <rect x="630" y="20" width="290" height="70" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="775" y="44" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--accent)">1. mdb-lib listener (auto-registered)</text>
+        <text x="775" y="62" text-anchor="middle" font-size="9.5" fill="var(--muted)">engine control · settings · config JSON</text>
+        <text x="775" y="77" text-anchor="middle" font-size="9.5" fill="var(--muted)">returns true = consumed, chain stops</text>
+
+        <rect x="630" y="120" width="290" height="60" rx="8" fill="var(--surface)" stroke="currentColor"/>
+        <text x="775" y="144" text-anchor="middle" font-size="11.5" font-weight="600" fill="currentColor">2. App developer's listener(s)</text>
+        <text x="775" y="162" text-anchor="middle" font-size="9.5" fill="var(--muted)">their own remote commands</text>
+
+        <rect x="630" y="210" width="290" height="56" rx="8" fill="none" stroke="var(--warn)" stroke-dasharray="4 3"/>
+        <text x="775" y="233" text-anchor="middle" font-size="11" font-weight="600" fill="var(--warn)">nobody consumed it</text>
+        <text x="775" y="250" text-anchor="middle" font-size="9.5" fill="var(--muted)">"unknown command: …" → outbound queue</text>
+
+        <line x1="150" y1="68" x2="208" y2="68" stroke="currentColor" marker-end="url(#carr)"/>
+        <line x1="340" y1="68" x2="398" y2="68" stroke="currentColor" marker-end="url(#carr)"/>
+        <line x1="570" y1="58" x2="628" y2="52" stroke="currentColor" marker-end="url(#carr)"/>
+        <line x1="775" y1="90" x2="775" y2="118" stroke="currentColor" marker-end="url(#carr)"/>
+        <text x="800" y="108" font-size="9" fill="var(--muted)">not consumed</text>
+        <line x1="775" y1="180" x2="775" y2="208" stroke="currentColor" marker-end="url(#carr)"/>
+        <text x="800" y="198" font-size="9" fill="var(--muted)">not consumed</text>
+      </svg>
+      <figcaption>
+        First-consume-wins. mdb-lib recognizes its own commands by content; the developer adds
+        remote commands without touching either library.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section id="config">
+    <h2><span class="eyebrow">04 — configs as JSON, owned by the library</span>Config flow</h2>
+    <p>
+      All config behavior — parsing, validation, persistence, live application, acknowledgment —
+      lives inside <code class="cmd">MdbConfigStore</code>. The dashboard sends JSON; the store
+      does everything else. Nobody outside the library ever touches SharedPreferences or
+      validates hex.
+    </p>
+
+    <figure>
+      <svg viewBox="0 0 940 430" role="img" aria-label="Config flow: dashboard sends a config JSON over the commands topic. mdb-lib's listener recognizes it and hands the raw JSON to MdbConfigStore.applyJson. The store parses the JSON, validates each name exists and each hex value has exactly the locked byte length, persists valid entries to SharedPreferences, and builds a per-name result. Accepted values are used live by the engine on its very next send with no restart. The store then enqueues per-name acks plus a full CONFIG_JSON snapshot so the dashboard shows confirmed device state, never assumed state.">
+        <defs>
+          <marker id="farr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <rect x="20" y="30" width="180" height="66" rx="8" fill="var(--surface)" stroke="currentColor" opacity="0.9"/>
+        <text x="110" y="55" text-anchor="middle" font-size="11.5" font-weight="600" fill="currentColor">Dashboard</text>
+        <text x="110" y="74" text-anchor="middle" font-size="9" fill="var(--muted)">{"setConfig": {"SESSION_BEGIN":</text>
+        <text x="110" y="86" text-anchor="middle" font-size="9" fill="var(--muted)">"03 FF FF", …}}</text>
+
+        <rect x="260" y="30" width="170" height="66" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/>
+        <text x="345" y="58" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--ok)">mqtt-lib</text>
+        <text x="345" y="76" text-anchor="middle" font-size="9.5" fill="var(--muted)">commands topic → listener chain</text>
+
+        <rect x="490" y="30" width="170" height="66" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="575" y="55" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--accent)">mdb-lib listener</text>
+        <text x="575" y="74" text-anchor="middle" font-size="9.5" fill="var(--muted)">recognizes config JSON,</text>
+        <text x="575" y="87" text-anchor="middle" font-size="9.5" fill="var(--muted)">hands raw JSON to the store</text>
+
+        <rect x="180" y="150" width="580" height="170" rx="10" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.4"/>
+        <text x="470" y="175" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--accent)">MdbConfigStore.applyJson(json)</text>
+
+        <rect x="205" y="195" width="120" height="52" rx="6" fill="var(--surface-2)" stroke="currentColor" opacity="0.8"/>
+        <text x="265" y="216" text-anchor="middle" font-size="10" font-weight="600" fill="currentColor">1. parse</text>
+        <text x="265" y="232" text-anchor="middle" font-size="8.5" fill="var(--muted)">single or bulk map</text>
+
+        <rect x="345" y="195" width="130" height="52" rx="6" fill="var(--surface-2)" stroke="currentColor" opacity="0.8"/>
+        <text x="410" y="212" text-anchor="middle" font-size="10" font-weight="600" fill="currentColor">2. validate</text>
+        <text x="410" y="226" text-anchor="middle" font-size="8.5" fill="var(--muted)">name exists? hex clean?</text>
+        <text x="410" y="238" text-anchor="middle" font-size="8.5" fill="var(--muted)">length exactly locked?</text>
+
+        <rect x="495" y="195" width="120" height="52" rx="6" fill="var(--surface-2)" stroke="currentColor" opacity="0.8"/>
+        <text x="555" y="216" text-anchor="middle" font-size="10" font-weight="600" fill="currentColor">3. persist</text>
+        <text x="555" y="232" text-anchor="middle" font-size="8.5" fill="var(--muted)">SharedPreferences</text>
+
+        <rect x="635" y="195" width="105" height="52" rx="6" fill="var(--surface-2)" stroke="currentColor" opacity="0.8"/>
+        <text x="687" y="216" text-anchor="middle" font-size="10" font-weight="600" fill="currentColor">4. result</text>
+        <text x="687" y="232" text-anchor="middle" font-size="8.5" fill="var(--muted)">per-name ok / error</text>
+
+        <line x1="325" y1="221" x2="343" y2="221" stroke="currentColor" marker-end="url(#farr)"/>
+        <line x1="475" y1="221" x2="493" y2="221" stroke="currentColor" marker-end="url(#farr)"/>
+        <line x1="615" y1="221" x2="633" y2="221" stroke="currentColor" marker-end="url(#farr)"/>
+
+        <text x="470" y="280" text-anchor="middle" font-size="10" fill="var(--muted)">invalid entries are rejected individually with a reason — one bad value never blocks the rest</text>
+        <text x="470" y="300" text-anchor="middle" font-size="10" fill="var(--muted)">engine reads payloads fresh from the store on every send → accepted values are live immediately, no restart</text>
+
+        <rect x="180" y="355" width="270" height="56" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/>
+        <text x="315" y="378" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--ok)">enqueue: per-name ack lines</text>
+        <text x="315" y="395" text-anchor="middle" font-size="9" fill="var(--muted)">"SESSION_BEGIN updated → 03 FF FF" / error text</text>
+
+        <rect x="490" y="355" width="270" height="56" rx="8" fill="var(--ok-soft)" stroke="var(--ok)"/>
+        <text x="625" y="378" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--ok)">enqueue: CONFIG_JSON snapshot</text>
+        <text x="625" y="395" text-anchor="middle" font-size="9" fill="var(--muted)">dashboard shows confirmed state, never assumed</text>
+
+        <line x1="200" y1="63" x2="258" y2="63" stroke="currentColor" marker-end="url(#farr)"/>
+        <line x1="430" y1="63" x2="488" y2="63" stroke="currentColor" marker-end="url(#farr)"/>
+        <line x1="575" y1="96" x2="500" y2="148" stroke="var(--accent)" marker-end="url(#farr)"/>
+        <line x1="330" y1="320" x2="318" y2="353" stroke="var(--ok)" marker-end="url(#farr)"/>
+        <line x1="610" y1="320" x2="622" y2="353" stroke="var(--ok)" marker-end="url(#farr)"/>
+      </svg>
+      <figcaption>
+        JSON contract in, validated hex out. The legacy text commands (setConfig:NAME:hex, …)
+        still work, so the existing dashboard needed no changes.
+      </figcaption>
+    </figure>
+
+    <pre class="code"><span class="c">// bulk update — any subset of names</span>
+{ <span class="s">"setConfig"</span>: { <span class="s">"SESSION_BEGIN"</span>: <span class="s">"03 FF FF"</span>, <span class="s">"READER_CONFIG_DATA"</span>: <span class="s">"01 02 19 78 01 02 E8 0B"</span> } }
+
+<span class="c">// reset names back to library defaults</span>
+{ <span class="s">"resetConfig"</span>: [<span class="s">"SESSION_BEGIN"</span>] }
+
+<span class="c">// ask for the current snapshot</span>
+{ <span class="s">"getConfig"</span>: <span class="k">true</span> }</pre>
+  </section>
+
+  <section id="mdbflow">
+    <h2><span class="eyebrow">05 — the full loop</span>MDB data flow, end to end</h2>
+    <figure>
+      <svg viewBox="0 0 940 300" role="img" aria-label="End-to-end MDB flow: the VMC talks to the CM30 transport inside mdb-lib; the MdbLib state machine answers on the bus, reading payloads from MdbConfigStore, and pushes every exchange line and heartbeat into mqtt-lib's outbound queue. The same lines are optionally delivered to the app's local logListener, and business vend events go to the vendListener. The queue's publisher thread ships everything to the dashboard.">
+        <defs>
+          <marker id="earr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <rect x="20" y="110" width="100" height="60" rx="8" fill="none" stroke="currentColor" opacity="0.6"/>
+        <text x="70" y="135" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">VMC</text>
+        <text x="70" y="152" text-anchor="middle" font-size="9" fill="var(--muted)">MDB bus</text>
+
+        <rect x="160" y="40" width="420" height="220" rx="12" fill="none" stroke="var(--accent)" stroke-dasharray="6 4" opacity="0.7"/>
+        <text x="370" y="62" text-anchor="middle" font-size="10" font-weight="600" fill="var(--accent)" letter-spacing="0.06em">MDB-LIB</text>
+
+        <rect x="185" y="110" width="120" height="60" rx="8" fill="var(--surface)" stroke="currentColor"/>
+        <text x="245" y="135" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor">CM30 transport</text>
+        <text x="245" y="152" text-anchor="middle" font-size="9" fill="var(--muted)">bytes + checksum</text>
+
+        <rect x="345" y="100" width="130" height="80" rx="8" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.3"/>
+        <text x="410" y="130" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--accent)">MdbLib</text>
+        <text x="410" y="148" text-anchor="middle" font-size="9" fill="var(--muted)">state machine</text>
+        <text x="410" y="162" text-anchor="middle" font-size="9" fill="var(--muted)">levels 1/2/3</text>
+
+        <rect x="345" y="205" width="130" height="42" rx="8" fill="var(--surface)" stroke="currentColor" opacity="0.9"/>
+        <text x="410" y="223" text-anchor="middle" font-size="10" font-weight="600" fill="currentColor">MdbConfigStore</text>
+        <text x="410" y="238" text-anchor="middle" font-size="8.5" fill="var(--muted)">payload bytes, live</text>
+
+        <line x1="120" y1="140" x2="183" y2="140" stroke="currentColor" marker-end="url(#earr)"/>
+        <line x1="305" y1="140" x2="343" y2="140" stroke="currentColor" marker-end="url(#earr)"/>
+        <line x1="410" y1="205" x2="410" y2="182" stroke="currentColor" marker-end="url(#earr)"/>
+        <text x="435" y="197" font-size="8.5" fill="var(--muted)">get(name)</text>
+
+        <rect x="640" y="40" width="150" height="52" rx="8" fill="var(--ok-soft)" stroke="var(--ok)" stroke-width="1.3"/>
+        <text x="715" y="62" text-anchor="middle" font-size="11" font-weight="700" fill="var(--ok)">outbound queue</text>
+        <text x="715" y="78" text-anchor="middle" font-size="9" fill="var(--muted)">(mqtt-lib) → dashboard</text>
+
+        <rect x="640" y="120" width="150" height="52" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/>
+        <text x="715" y="142" text-anchor="middle" font-size="11" font-weight="600" fill="var(--warn)">vendListener</text>
+        <text x="715" y="158" text-anchor="middle" font-size="9" fill="var(--muted)">typed payment events</text>
+
+        <rect x="640" y="200" width="150" height="52" rx="8" fill="var(--surface)" stroke="currentColor"/>
+        <text x="715" y="222" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">app logListener</text>
+        <text x="715" y="238" text-anchor="middle" font-size="9" fill="var(--muted)">optional UI mirror</text>
+
+        <line x1="475" y1="110" x2="638" y2="70" stroke="var(--ok)" marker-end="url(#earr)"/>
+        <text x="560" y="76" text-anchor="middle" font-size="9" font-weight="600" fill="var(--ok)">enqueue(line / status)</text>
+
+        <line x1="475" y1="140" x2="638" y2="146" stroke="var(--warn)" marker-end="url(#earr)"/>
+        <text x="557" y="132" text-anchor="middle" font-size="9" fill="var(--warn)">onVendRequest / Success / Failure</text>
+
+        <line x1="475" y1="168" x2="638" y2="222" stroke="currentColor" marker-end="url(#earr)"/>
+        <text x="548" y="212" text-anchor="middle" font-size="9" fill="var(--muted)">onLog(line)</text>
+
+        <rect x="830" y="120" width="95" height="52" rx="8" fill="var(--surface)" stroke="currentColor" opacity="0.9"/>
+        <text x="877" y="142" text-anchor="middle" font-size="10" font-weight="600" fill="currentColor">Payment</text>
+        <text x="877" y="158" text-anchor="middle" font-size="10" font-weight="600" fill="currentColor">gateway</text>
+        <line x1="790" y1="146" x2="828" y2="146" stroke="var(--warn)" marker-end="url(#earr)"/>
+      </svg>
+      <figcaption>
+        The engine's three outputs: the queue (always, to the dashboard), the typed
+        <code class="cmd">vendListener</code> (payment events → the app's gateway), and the
+        optional local log mirror.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section id="vend">
+    <h2><span class="eyebrow">06 — the money path</span>VendListener: one paid vend, end to end</h2>
+    <p>
+      The typed hook a payment app implements. The core idea: <strong>the money follows the
+      product, not the button press</strong> — authorize on request, capture only after the VMC
+      confirms the item physically dispensed, refund if it didn't. All callbacks run on the MDB
+      worker thread: return immediately and do gateway work on your own thread; the engine keeps
+      ACKing the VMC's polls while it waits (the spec's delayed-response pattern), so a gateway
+      round trip of a few seconds costs nothing on the bus.
+    </p>
+
+    <figure>
+      <svg viewBox="0 0 940 620" role="img" aria-label="Sequence diagram of a paid vend across four lanes: VMC, MdbLib, the app's VendListener, and the payment gateway. VEND REQUEST from the VMC is ACKed by MdbLib which fires onVendRequest to the app; the app authorizes with the gateway while MdbLib keeps answering polls with ACK; on approval the app calls approveVend and MdbLib sends VEND APPROVED on the next poll; the VMC dispenses and sends VEND SUCCESS, MdbLib fires onVendSuccess and the app captures the payment; SESSION COMPLETE then END SESSION close the session and onSessionEnded fires for cleanup. Alternates: a declined payment calls cancelVend leading to VEND DENIED; a failed dispense sends VEND FAILURE leading to onVendFailure and a refund.">
+        <defs>
+          <marker id="varr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+          <marker id="varrA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+          </marker>
+          <marker id="varrO" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/>
+          </marker>
+          <marker id="varrW" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/>
+          </marker>
+        </defs>
+
+        <!-- lane headers -->
+        <rect x="45" y="18" width="110" height="34" rx="8" fill="none" stroke="currentColor" opacity="0.6"/>
+        <text x="100" y="40" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor">VMC</text>
+        <rect x="285" y="18" width="110" height="34" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="340" y="40" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent)">MdbLib</text>
+        <rect x="525" y="18" width="150" height="34" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/>
+        <text x="600" y="40" text-anchor="middle" font-size="12" font-weight="700" fill="var(--warn)">App (VendListener)</text>
+        <rect x="785" y="18" width="120" height="34" rx="8" fill="var(--surface)" stroke="currentColor"/>
+        <text x="845" y="40" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor">Gateway</text>
+
+        <!-- lifelines -->
+        <line x1="100" y1="52" x2="100" y2="520" stroke="currentColor" opacity="0.25"/>
+        <line x1="340" y1="52" x2="340" y2="520" stroke="var(--accent)" opacity="0.35"/>
+        <line x1="600" y1="52" x2="600" y2="520" stroke="var(--warn)" opacity="0.35"/>
+        <line x1="845" y1="52" x2="845" y2="520" stroke="currentColor" opacity="0.25"/>
+
+        <!-- 1 VEND REQUEST -->
+        <line x1="100" y1="85" x2="336" y2="85" stroke="currentColor" marker-end="url(#varr)"/>
+        <text x="218" y="77" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor">VEND REQUEST (13 00 price item)</text>
+
+        <!-- 2 ACK -->
+        <line x1="340" y1="112" x2="104" y2="112" stroke="var(--accent)" marker-end="url(#varrA)"/>
+        <text x="218" y="104" text-anchor="middle" font-size="10" fill="var(--accent)">ACK</text>
+
+        <!-- 3 onVendRequest -->
+        <line x1="340" y1="142" x2="596" y2="142" stroke="var(--warn)" marker-end="url(#varrW)"/>
+        <text x="468" y="134" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--warn)">onVendRequest(amount, minorUnits, itemNumber)</text>
+
+        <!-- 4 authorize -->
+        <line x1="600" y1="172" x2="841" y2="172" stroke="currentColor" marker-end="url(#varr)"/>
+        <text x="722" y="164" text-anchor="middle" font-size="10" fill="currentColor">AUTHORIZE (hold the money)</text>
+
+        <!-- waiting note -->
+        <rect x="130" y="192" width="290" height="30" rx="6" fill="none" stroke="var(--accent)" stroke-dasharray="3 3" opacity="0.7"/>
+        <text x="275" y="211" text-anchor="middle" font-size="9.5" fill="var(--accent)">meanwhile: POLL → ACK, POLL → ACK … (engine handles the waiting)</text>
+
+        <!-- 5 approved -->
+        <line x1="845" y1="245" x2="604" y2="245" stroke="currentColor" marker-end="url(#varr)"/>
+        <text x="722" y="237" text-anchor="middle" font-size="10" fill="currentColor">approved</text>
+
+        <!-- 6 approveVend -->
+        <line x1="600" y1="275" x2="344" y2="275" stroke="var(--ok)" marker-end="url(#varrO)"/>
+        <text x="468" y="267" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--ok)">MdbLib.approveVend()</text>
+
+        <!-- 7 VEND APPROVED -->
+        <line x1="340" y1="305" x2="104" y2="305" stroke="var(--accent)" marker-end="url(#varrA)"/>
+        <text x="218" y="297" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--accent)">VEND APPROVED (on next POLL)</text>
+
+        <!-- 8 VEND SUCCESS -->
+        <line x1="100" y1="345" x2="336" y2="345" stroke="currentColor" marker-end="url(#varr)"/>
+        <text x="218" y="337" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor">VEND SUCCESS (13 02) — item dropped!</text>
+
+        <!-- 9 onVendSuccess -->
+        <line x1="340" y1="375" x2="596" y2="375" stroke="var(--warn)" marker-end="url(#varrW)"/>
+        <text x="468" y="367" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--warn)">onVendSuccess(itemNumber)</text>
+
+        <!-- 10 capture -->
+        <line x1="600" y1="405" x2="841" y2="405" stroke="currentColor" marker-end="url(#varr)"/>
+        <text x="722" y="397" text-anchor="middle" font-size="10" fill="currentColor">CAPTURE (take the held money)</text>
+
+        <!-- 11 SESSION COMPLETE / END SESSION -->
+        <line x1="100" y1="440" x2="336" y2="440" stroke="currentColor" marker-end="url(#varr)"/>
+        <text x="218" y="432" text-anchor="middle" font-size="10" fill="currentColor">SESSION COMPLETE (13 04)</text>
+        <line x1="340" y1="468" x2="104" y2="468" stroke="var(--accent)" marker-end="url(#varrA)"/>
+        <text x="218" y="460" text-anchor="middle" font-size="10" fill="var(--accent)">END SESSION (on next POLL)</text>
+
+        <!-- 12 onSessionEnded -->
+        <line x1="340" y1="498" x2="596" y2="498" stroke="var(--warn)" marker-end="url(#varrW)"/>
+        <text x="468" y="490" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--warn)">onSessionEnded() — cleanup</text>
+
+        <!-- alternates note -->
+        <rect x="45" y="540" width="860" height="62" rx="8" fill="none" stroke="var(--err)" stroke-dasharray="4 3" opacity="0.8"/>
+        <text x="475" y="562" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--err)">The two exits that are not a sale</text>
+        <text x="475" y="580" text-anchor="middle" font-size="10" fill="var(--muted)">Gateway DECLINED → MdbLib.cancelVend() → VEND DENIED goes out → session ends → onSessionEnded()</text>
+        <text x="475" y="595" text-anchor="middle" font-size="10" fill="var(--muted)">Product JAMMED → VMC sends VEND FAILURE (13 03) → onVendFailure() → REFUND/void the hold → onSessionEnded()</text>
+      </svg>
+      <figcaption>
+        Authorize on request, capture on success, refund on failure, clean up on session end.
+        Approval and dispensing are two different physical events — the money follows the product.
+      </figcaption>
+    </figure>
+
+    <pre class="code"><span class="c">// once at setup (persisted, so genuinely once):</span>
+MdbLib.setCancelMode(MdbLib.CancelResponse.VEND_DENIED)
+
+MdbLib.vendListener = <span class="k">object</span> : MdbLib.VendListener {
+    <span class="k">override fun</span> onVendRequest(amount: Double, minorUnits: Int, itemNumber: Int) {
+        <span class="c">// minorUnits = 350 (EXACT integer halalas - for the gateway & money math)</span>
+        <span class="c">// amount     = 3.5 (decimal, for display). MDB worker thread - pay async:</span>
+        scope.launch {
+            <span class="k">if</span> (gateway.authorize(minorUnits)) MdbLib.approveVend()
+            <span class="k">else</span> MdbLib.cancelVend()          <span class="c">// simple call, uses the standing mode set above</span>
+        }
+    }
+    <span class="k">override fun</span> onVendSuccess(itemNumber: Int) { scope.launch { gateway.capture() } }
+    <span class="k">override fun</span> onVendFailure()                { scope.launch { gateway.refund() } }
+    <span class="k">override fun</span> onSessionEnded()               { <span class="c">/* per-session cleanup */</span> }
+}</pre>
+
+    <div class="callout warn">
+      <p>
+        <strong>Rules:</strong> never block inside a callback (a stalled bus loop makes the VMC
+        time out and RESET the reader); exceptions you throw are caught and logged, never fatal;
+        <code class="cmd">price</code>/<code class="cmd">itemNumber</code> are the raw 16-bit MDB
+        values (<code class="cmd">-1</code> if the VMC omitted the item bytes) — scale price per
+        your READER CONFIG DATA scale factor. Cancelled sessions skip success/failure and go
+        straight to <code class="cmd">onSessionEnded()</code>, which is why refund logic lives in
+        <code class="cmd">onVendFailure</code> and only cleanup lives in the session-end hook.
+      </p>
+    </div>
+  </section>
+
+  <section id="api">
+    <h2><span class="eyebrow">07 — the contract</span>Public API, as shipped</h2>
+
+    <h3>mqtt-lib (1.1.0)</h3>
+    <pre class="code"><span class="k">class</span> MqttConfig(
+    <span class="k">val</span> topicPrefix: String,              <span class="c">// e.g. "cm30-mdb/hamdan-rabbah"</span>
+    <span class="k">val</span> deviceId: String,                 <span class="c">// shown on-screen; separates machines</span>
+    <span class="k">val</span> brokerHost: String = <span class="s">"broker.hivemq.com"</span>,
+    <span class="k">val</span> brokerPort: Int = <span class="s">1883</span>,
+    <span class="k">val</span> keepAliveSec: Int = <span class="s">30</span>,
+    <span class="k">val</span> queueCapacity: Int = <span class="s">1000</span>
+)
+
+<span class="k">object</span> MqttLib {
+    <span class="k">fun</span> init(config: MqttConfig)
+    <span class="k">fun</span> start() / stop()
+    <span class="k">fun</span> enqueue(payload: String)                          <span class="c">// -> liveLog; THE one way out</span>
+    <span class="k">fun</span> enqueue(topicSuffix: String, payload: String)     <span class="c">// custom channel</span>
+    <span class="k">fun</span> addCommandListener(listener: (String) -&gt; Boolean) <span class="c">// true = consumed</span>
+    <span class="k">fun</span> removeCommandListener(listener: (String) -&gt; Boolean)
+    <span class="k">val</span> isConnected: Boolean
+    <span class="k">val</span> droppedMessages: Long                             <span class="c">// queue-overflow counter</span>
+}</pre>
+
+    <h3>mdb-lib (6.4.1)</h3>
+    <pre class="code"><span class="k">object</span> MdbLib {
+    <span class="k">fun</span> init(context: Context)   <span class="c">// MQTT optional: without it MdbLib runs fully offline</span>
+    <span class="k">fun</span> start() / stop()         <span class="c">// open/close the MDB port + worker loop</span>
+
+    <span class="c">// vend actions</span>
+    <span class="k">fun</span> beginSession()                                 <span class="c">// the "card tap" (manual mode)</span>
+    <span class="k">fun</span> approveVend(): Boolean                         <span class="c">// false if no VEND REQUEST pending</span>
+    <span class="k">fun</span> cancelVend(): Boolean                          <span class="c">// simple: sends the standing mode</span>
+    <span class="k">fun</span> cancelVend(response: CancelResponse): Boolean  <span class="c">// one-time override</span>
+
+    <span class="c">// state, readable on demand</span>
+    <span class="k">val</span> currentState: String        <span class="c">// INACTIVE_STATE | DISABLED_STATE | ENABLED_STATE | VEND_STATE</span>
+    <span class="k">val</span> isSessionActive: Boolean
+
+    <span class="c">// settings - each also a dashboard command; persisted; SETTINGS_JSON auto-published</span>
+    <span class="k">fun</span> setCancelMode(mode: CancelResponse)            <span class="c">// set ONCE, then cancelVend() is enough</span>
+    <span class="k">fun</span> setAutoSession(enabled: Boolean); <span class="k">val</span> isAutoSession: Boolean
+    <span class="k">fun</span> setMdbLevel(level: Int)                        <span class="c">// 1 | 2 | 3</span>
+    <span class="k">fun</span> setMqttLogging(enabled: Boolean); <span class="k">val</span> isMqttLoggingEnabled: Boolean
+    <span class="k">fun</span> setPollVisibility(show: Boolean) / setUnhandledVisibility(show: Boolean)
+    <span class="k">fun</span> currentSettingsJson(): String
+
+    <span class="c">// hex payloads - from Android code, dashboard auto-synced on every change</span>
+    <span class="k">object</span> ConfigName { SESSION_BEGIN, READER_CONFIG_DATA, ... }   <span class="c">// name constants</span>
+    <span class="k">fun</span> getConfigHex(name): String / setConfigHex(name, hex): String? / resetConfig(name)
+    <span class="k">fun</span> configNames(): List&lt;String&gt; / configSnapshotJson(): String
+
+    <span class="c">// price conversion (also applied automatically before onVendRequest)</span>
+    <span class="k">fun</span> priceToAmount(raw: Int): Double / priceToMinorUnits(raw: Int): Int
+
+    <span class="k">enum class</span> CancelResponse { SESSION_CANCEL_REQUEST, VEND_DENIED }
+
+    <span class="k">interface</span> VendListener {
+        <span class="k">fun</span> onVendRequest(amount: Double, minorUnits: Int, itemNumber: Int)
+        <span class="k">fun</span> onVendSuccess(itemNumber: Int)
+        <span class="k">fun</span> onVendFailure()
+        <span class="k">fun</span> onSessionEnded()
+    }
+    <span class="k">var</span> vendListener: VendListener?
+    <span class="k">var</span> logListener: ((line: String, showOnScreen: Boolean) -&gt; Unit)?
+    <span class="k">var</span> statusListener: ((stateJson: String) -&gt; Unit)?   <span class="c">// instant on state change + 3s heartbeat</span>
+}
+
+<span class="k">object</span> MdbConfigStore {
+    <span class="k">fun</span> applyJson(json: String): ApplyResult   <span class="c">// parse + validate + persist + acks, inside</span>
+    <span class="k">fun</span> snapshotJson(): String
+    <span class="k">fun</span> get(name) / set(name, hex): String? / resetToDefault(name) / names()
+}</pre>
+
+    <h3>Every remote command has an app-function twin</h3>
+    <p>
+      Both paths call the same code — a standalone APK can drive everything with no dashboard,
+      and a dashboard can drive everything with no app code. Settings persist either way and are
+      reported back in <code class="cmd">SETTINGS_JSON:</code>.
+    </p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>App function</th><th>Dashboard command</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">MdbLib.start() / stop()</td><td class="mono">open / close</td></tr>
+        <tr><td class="mono">MdbLib.beginSession()</td><td class="mono">beginSession</td></tr>
+        <tr><td class="mono">MdbLib.approveVend()</td><td class="mono">vendApprove</td></tr>
+        <tr><td class="mono">MdbLib.setCancelMode(...)</td><td class="mono">setCancelMode:sessionCancel|vendDenied</td></tr>
+        <tr><td class="mono">MdbLib.cancelVend()</td><td class="mono">cancelVend</td></tr>
+        <tr><td class="mono">MdbLib.cancelVend(response)</td><td class="mono">cancelVend:sessionCancel|vendDenied</td></tr>
+        <tr><td class="mono">MdbLib.setAutoSession(true|false)</td><td class="mono">setSessionMode:auto|manual</td></tr>
+        <tr><td class="mono">MdbLib.setMqttLogging(true|false)</td><td class="mono">setMqttLogging:on|off</td></tr>
+        <tr><td class="mono">MdbLib.setConfigHex / getConfigHex / resetConfig</td><td class="mono">setConfig: / getConfig / resetConfig: (+ JSON form)</td></tr>
+        <tr><td class="mono">MdbLib.setMdbLevel(1..3)</td><td class="mono">setMdbLevel:1|2|3</td></tr>
+        <tr><td class="mono">MdbLib.setPollVisibility / setUnhandledVisibility</td><td class="mono">setPollVisibility:on|off / setUnhandledVisibility:on|off</td></tr>
+        <tr><td class="mono">MdbLib.currentSettingsJson()</td><td class="mono">getSettings</td></tr>
+        <tr><td class="mono">MdbConfigStore.applyJson / set / resetToDefault / snapshotJson</td><td class="mono">config JSON / setConfig: / resetConfig: / getConfig</td></tr>
+        <tr><td class="mono">MqttLib.isConnected</td><td class="mono">ping (answered PONG by mqtt-lib)</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>The whole integration</h3>
+    <pre class="code"><span class="c">// once, at startup:</span>
+MqttLib.init(MqttConfig(topicPrefix = <span class="s">"cm30-mdb/hamdan-rabbah"</span>, deviceId = myDeviceId))
+MqttLib.start()
+MdbLib.init(applicationContext)   <span class="c">// applicationContext: app-lifetime Context, for SharedPreferences</span>
+MdbLib.start()
+<span class="c">// MDB data now flows to the dashboard; all remote commands work. Add the VendListener above</span>
+<span class="c">// for payments, and share the queue for your own logs:</span>
+MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span>)</pre>
+  </section>
+
+  <section id="shipped">
+    <h2><span class="eyebrow">08 — from design to artifacts</span>What shipped</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Then (single app)</th><th>Now (libraries)</th></tr></thead>
+      <tbody>
+        <tr><td>publishLog() spawned <strong>a new thread per message</strong></td><td>One bounded queue + one publisher thread. Producers never block, never race.</td></tr>
+        <tr><td>Engine → Activity → MqttBridge; the Activity was the glue</td><td>Engine enqueues directly; the app keeps optional local listeners purely for its own UI.</td></tr>
+        <tr><td>One big remote-command <code class="cmd">when</code> in the Activity</td><td>Listener chain: mdb-lib auto-registers, the app adds its own, first-consume-wins.</td></tr>
+        <tr><td>No typed vend events — only log strings</td><td><code class="cmd">VendListener</code>: onVendRequest / onVendSuccess / onVendFailure / onSessionEnded, built for the authorize→capture→refund payment pattern.</td></tr>
+        <tr><td>Config text commands parsed in the Activity</td><td>JSON contract handled inside <code class="cmd">MdbConfigStore.applyJson()</code>; legacy text form still accepted, so the existing dashboard needed zero changes.</td></tr>
+        <tr><td>Device + simulator flavors</td><td>Simulator removed — real CM30 hardware only.</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="callout">
+      <p>
+        <strong>Artifacts:</strong> <code class="cmd">mqtt-lib-1.1.0.aar</code>,
+        <code class="cmd">mdb-lib-6.4.1.aar</code> (plus the bundled CM30 vendor .aar as its
+        runtime dependency), the demo APK as the reference integration, and
+        <code class="cmd">LIBRARY_README.md</code> for the integrating developer. Wire protocol
+        unchanged throughout — the existing <code class="cmd">log-viewer.html</code> dashboard
+        works with every build.
+      </p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  CM30 MDB Slave project — library architecture, as built. Current as of mdb-lib 6.4.1 /
+  mqtt-lib 1.1.0 (demo app v2.13.4, build 52).
+</footer>

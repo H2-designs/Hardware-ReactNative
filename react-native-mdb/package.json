@@ -1,0 +1,13 @@
+{
+  "name": "react-native-mdb",
+  "version": "1.0.0",
+  "description": "React Native bridge for the CM30 MDB Cashless Device libraries (mdb-lib + mqtt-lib): full vend/payment flow, remote dashboard link, hex payload configs.",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": ["index.js", "index.d.ts", "android"],
+  "keywords": ["react-native", "mdb", "vending", "cashless", "cm30"],
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
+  }
+}

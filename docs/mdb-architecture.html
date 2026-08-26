@@ -1,0 +1,747 @@
+<title>MDB Slave Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --surface: #ffffff;
+    --surface-2: #eeece4;
+    --border: #ddd8cc;
+    --text: #262320;
+    --muted: #6f6a60;
+    --accent: #0d7fa6;
+    --accent-soft: rgba(13, 127, 166, 0.10);
+    --ok: #1f8a4c;
+    --warn: #a8710a;
+    --err: #b23b3b;
+    --mono-chip: #efece2;
+    --rx: #0d7fa6;
+    --tx: #1f8a4c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b0e12;
+      --surface: #12161c;
+      --surface-2: #171d25;
+      --border: #232a33;
+      --text: #d7e0ea;
+      --muted: #8ea0b5;
+      --accent: #35c7ff;
+      --accent-soft: rgba(53, 199, 255, 0.12);
+      --ok: #6fe89a;
+      --warn: #e8c766;
+      --err: #e86f6f;
+      --mono-chip: #1a2029;
+      --rx: #35c7ff;
+      --tx: #6fe89a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0e12;
+    --surface: #12161c;
+    --surface-2: #171d25;
+    --border: #232a33;
+    --text: #d7e0ea;
+    --muted: #8ea0b5;
+    --accent: #35c7ff;
+    --accent-soft: rgba(53, 199, 255, 0.12);
+    --ok: #6fe89a;
+    --warn: #e8c766;
+    --err: #e86f6f;
+    --mono-chip: #1a2029;
+    --rx: #35c7ff;
+    --tx: #6fe89a;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, Segoe UI, sans-serif;
+    line-height: 1.6;
+  }
+  ::selection { background: var(--accent-soft); }
+
+  code, .mono { font-family: 'IBM Plex Mono', 'Cascadia Code', Consolas, monospace; }
+
+  header.top {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: baseline;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  header.top .title { font-weight: 700; font-size: 15px; letter-spacing: 0.01em; }
+  header.top nav { display: flex; gap: 16px; flex-wrap: wrap; }
+  header.top nav a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    border-bottom: 1px solid transparent;
+    padding-bottom: 2px;
+  }
+  header.top nav a:hover, header.top nav a:focus-visible {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  main { max-width: 880px; margin: 0 auto; padding: 48px 24px 96px; }
+
+  h1 { font-size: 30px; font-weight: 700; text-wrap: balance; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); font-size: 16px; max-width: 62ch; margin: 0 0 56px; }
+  h2 {
+    font-size: 21px;
+    font-weight: 700;
+    margin: 64px 0 6px;
+    padding-top: 8px;
+    letter-spacing: -0.005em;
+    scroll-margin-top: 70px;
+  }
+  h2 .eyebrow {
+    display: block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  h3 { font-size: 16px; font-weight: 600; margin: 28px 0 10px; }
+  p { margin: 0 0 16px; max-width: 70ch; }
+  ul, ol { margin: 0 0 16px; padding-left: 22px; }
+  li { margin-bottom: 6px; max-width: 66ch; }
+  strong { font-weight: 600; }
+
+  .cmd {
+    font-family: 'IBM Plex Mono', monospace;
+    background: var(--mono-chip);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.92em;
+    white-space: nowrap;
+  }
+
+  figure {
+    margin: 28px 0 32px;
+    padding: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow-x: auto;
+  }
+  figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  figcaption { margin-top: 14px; font-size: 13px; color: var(--muted); text-align: center; }
+
+  .callout {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 20px 0;
+    font-size: 14.5px;
+  }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 14px;
+    margin: 20px 0 28px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .card h4 { margin: 0 0 6px; font-size: 14px; font-family: 'IBM Plex Mono', monospace; color: var(--accent); }
+  .card p { margin: 0; font-size: 13.5px; color: var(--muted); max-width: none; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 20px 0 28px; }
+  .table-wrap { overflow-x: auto; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+  td.mono { font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
+  tr.dir-rx td:first-child { color: var(--rx); font-weight: 600; }
+  tr.dir-tx td:first-child { color: var(--tx); font-weight: 600; }
+  tr.transition td { border-bottom: 2px solid var(--accent); }
+
+  .seq { font-size: 13px; }
+  .seq td { padding: 6px 12px; }
+  .seq .note { color: var(--muted); }
+
+  .pill {
+    display: inline-block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+  .pill.l1 { background: var(--accent-soft); color: var(--accent); }
+  .pill.l2 { background: rgba(232, 199, 102, 0.15); color: var(--warn); }
+  .pill.l3 { background: rgba(178, 59, 59, 0.12); color: var(--err); }
+  .pill.both { background: var(--surface-2); color: var(--muted); }
+  .pill.state { background: var(--surface-2); color: var(--text); }
+
+  footer { max-width: 880px; margin: 0 auto; padding: 0 24px 64px; color: var(--muted); font-size: 13px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    a, .card { transition: color 0.15s ease, border-color 0.15s ease; }
+  }
+</style>
+
+<header class="top">
+  <span class="title">MDB SLAVE — ARCHITECTURE</span>
+  <nav>
+    <a href="#overview">Overview</a>
+    <a href="#components">Components</a>
+    <a href="#remote">Remote protocol</a>
+    <a href="#flow">Data flow</a>
+    <a href="#engine">Protocol engine</a>
+    <a href="#handshake">Handshakes</a>
+    <a href="#vend">Vend cycle</a>
+    <a href="#level">Levels</a>
+    <a href="#files">File map</a>
+  </nav>
+</header>
+
+<main>
+  <h1>How the MDB Slave app works</h1>
+  <p class="lede">
+    An Android app on the CM30 terminal impersonates an MDB Cashless Device #1 on a real vending
+    machine bus, while a browser page anywhere on the internet watches every byte and drives it
+    remotely. This document states exactly what each piece does, which bytes trigger which
+    responses, and where every decision is made in the code.
+  </p>
+
+  <section id="overview">
+    <h2><span class="eyebrow">01 — the shape of it</span>System overview</h2>
+    <p>Three parties, two links:</p>
+    <ul>
+      <li><strong>VMC ↔ Android app</strong> — the real MDB bus. The vending machine controller
+      (VMC) is the master; it polls constantly and our app answers as slave address
+      <code class="cmd">0x10</code> (Cashless Device #1, command range
+      <code class="cmd">0x10</code>–<code class="cmd">0x17</code>). Byte I/O goes through the CM30
+      vendor library.</li>
+      <li><strong>Android app ↔ PC browser</strong> — MQTT over the public broker
+      <code class="cmd">broker.hivemq.com:1883</code> (the PC side connects via WebSocket on 8884).
+      Both sides only make outbound connections, so this works across the internet with no port
+      forwarding, VPN, or fixed IP. It is not a private channel — anyone who knows the topic
+      strings can read or write them.</li>
+    </ul>
+    <p>
+      Inside the app, the core rule is: <strong>the MDB protocol engine and the MQTT client never
+      reference each other.</strong> <code class="cmd">MdbProtocolEngine</code> has no network
+      imports; <code class="cmd">MqttBridge</code> has no MDB knowledge. The single place they
+      meet is <code class="cmd">MdbSlaveActivity</code>, which implements the engine's
+      <code class="cmd">Listener</code> interface on one side and owns the MQTT callbacks on the
+      other.
+    </p>
+  </section>
+
+  <section id="components">
+    <h2><span class="eyebrow">02 — who owns what</span>Components</h2>
+    <div class="card-grid">
+      <div class="card">
+        <h4>MdbProtocolEngine.kt</h4>
+        <p>The full slave state machine: 4 states, per-level setup handshakes, the vend cycle,
+        global RESET. Runs one worker thread. Reports outward only via
+        <code class="cmd">Listener.onExchange()</code> / <code class="cmd">onVmcStatus()</code>.</p>
+      </div>
+      <div class="card">
+        <h4>MdbSlaveActivity.kt</h4>
+        <p>The only coordinator. Implements the engine's Listener, owns
+        <code class="cmd">appendLine()</code> (screen + LogServer + MQTT), parses every remote
+        command string into an engine/config method call. Contains zero protocol logic.</p>
+      </div>
+      <div class="card">
+        <h4>MdbSlaveWrapper.kt (×2 flavors)</h4>
+        <p><code class="cmd">device</code>: real CM30 hardware I/O. <code class="cmd">simulator</code>:
+        scripted fake VMC for emulators. Identical API. Both compute the MDB checksum (8-bit sum,
+        appended as last byte) and fetch every payload fresh from MdbConfig on each send.</p>
+      </div>
+      <div class="card">
+        <h4>MqttBridge.kt</h4>
+        <p>Hand-rolled MQTT 3.1.1 client (CONNECT / PUBLISH QoS 0 / SUBSCRIBE / PINGREQ — no
+        library). Auto-reconnects every 3 s on drop. All socket writes happen on background
+        threads so UI-thread callers can never hit NetworkOnMainThreadException.</p>
+      </div>
+      <div class="card">
+        <h4>MdbConfig.kt</h4>
+        <p>The wire payloads themselves — every response's raw bytes, persisted in
+        SharedPreferences, editable live from the PC page via
+        <code class="cmd">setConfig:NAME:hex</code>. Length is locked per name; only values
+        change.</p>
+      </div>
+      <div class="card">
+        <h4>AppSettings.kt</h4>
+        <p>Persisted behavior flags: session-begin mode (auto/manual), VMC-cancel response mode,
+        MDB level (1/2/3), POLL and unhandled-traffic visibility. Loaded once at startup into the
+        engine.</p>
+      </div>
+      <div class="card">
+        <h4>LogServer.kt</h4>
+        <p>Local WebSocket server for the USB/adb-forward path — receives the same log lines as
+        MQTT, for bench use with a cable instead of the internet.</p>
+      </div>
+      <div class="card">
+        <h4>log-viewer.html</h4>
+        <p>The whole PC control surface in one static file: live log, multi-device picker, all
+        toggles, and the per-byte Config editor with level-aware rows.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="remote">
+    <h2><span class="eyebrow">03 — the wire between app and browser</span>Remote protocol (MQTT)</h2>
+    <p>
+      Each physical device derives a 6-character ID from its <code class="cmd">ANDROID_ID</code>
+      (shown on its screen, e.g. <code class="cmd">85E5F7</code>) and scopes its two topics with
+      it, so many machines can share the broker without colliding:
+    </p>
+    <ul>
+      <li><code class="cmd">cm30-mdb/hamdan-rabbah/&lt;deviceId&gt;/liveLog</code> — device → PC. Every
+      log line, plus tagged machine-readable messages (below).</li>
+      <li><code class="cmd">cm30-mdb/hamdan-rabbah/&lt;deviceId&gt;/commands</code> — PC → device. Plain
+      text commands.</li>
+    </ul>
+    <p>
+      The PC page subscribes to the wildcard <code class="cmd">…/+/liveLog</code>, so every online
+      device self-announces into its device dropdown; commands are published only to the selected
+      device's topic.
+    </p>
+
+    <h3>Tagged messages (device → PC)</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Prefix</th><th>When</th><th>Content</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">VMC_STATUS:</td><td>Every 3 s, plus immediately on open/close</td><td><code class="cmd">{"state":"ENABLED_STATE","recentActivity":true}</code> — drives the colored VMC bar; recentActivity = bus traffic seen within 5 s.</td></tr>
+        <tr><td class="mono">SETTINGS_JSON:</td><td>On boot and after every setting change</td><td>All persisted settings, so the PC controls always show the device's real values, never assumed defaults.</td></tr>
+        <tr><td class="mono">CONFIG_JSON:</td><td>On <code class="cmd">getConfig</code> and after every setConfig/resetConfig</td><td>Every payload name → current hex string, used to populate the Config editor.</td></tr>
+        <tr><td class="mono">PONG</td><td>Reply to <code class="cmd">ping</code></td><td>Proves the device is alive; the PC page's "connected" state means a real round trip succeeded, not just broker connectivity.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Commands (PC → device)</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Command</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">open / close</td><td>Start / stop the MDB port and worker loop. Close resets state to INACTIVE and announces it immediately.</td></tr>
+        <tr><td class="mono">beginSession</td><td>Arms BEGIN SESSION for the next POLL (the manual "card tap").</td></tr>
+        <tr><td class="mono">setSessionMode:auto|manual</td><td>Auto: sessions self-arm on READER ENABLE and after each END SESSION. Manual: only beginSession starts one. Switching mid-session cancels the live session; switching while ENABLED arms/disarms immediately.</td></tr>
+        <tr><td class="mono">vendApprove</td><td>Arms VEND APPROVED — only accepted if a VEND REQUEST has actually arrived; otherwise rejected with an explanation, never queued.</td></tr>
+        <tr><td class="mono">cancelVend[:sessionCancel|:vendDenied]</td><td>Cancels the live session on the next POLL, sending exactly the chosen response (or the standing default). No-op if no session is active.</td></tr>
+        <tr><td class="mono">setCancelMode:sessionCancel|vendDenied</td><td>Standing default used by plain cancelVend and by the VMC's own VEND CANCEL (13H 01H).</td></tr>
+        <tr><td class="mono">setMdbLevel:1|2|3</td><td>Selects which handshake variant, which BEGIN SESSION payload, and which PERIPHERAL ID payload are used (see <a href="#level">Levels</a>).</td></tr>
+        <tr><td class="mono">setPollVisibility / setUnhandledVisibility :on|off</td><td>Whether idle POLL→ACK and unrecognized commands appear in the remote log. Either way they never touch the on-device screen (see performance note below).</td></tr>
+        <tr><td class="mono">getSettings / getConfig / ping</td><td>Request the corresponding tagged message above.</td></tr>
+        <tr><td class="mono">setConfig:NAME:hex / resetConfig:NAME</td><td>Edit or reset one wire payload in MdbConfig. Length-validated on the device; the device's own ack line ("NAME updated → …" or a specific error) is what the PC shows — success is never assumed.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="flow">
+    <h2><span class="eyebrow">04 — who calls whom</span>Data flow</h2>
+    <p>
+      Bus traffic flows left to right; remote commands flow right to left along the dashed arrows.
+      The engine's only outward surface is the two Listener callbacks — it cannot name MQTT,
+      LogServer, or the screen.
+    </p>
+
+    <figure>
+      <svg viewBox="0 0 980 400" role="img" aria-label="Data flows from the VMC hardware bus through MdbSlaveWrapper into MdbProtocolEngine, which reports exchanges through a Listener callback to MdbSlaveActivity; the Activity fans that out to LogServer and MqttBridge, and MqttBridge relays to the PC control page over a public broker. Remote commands from the PC page flow the same path in reverse, arriving at the Activity and being translated into engine method calls.">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+          <marker id="arrowAccent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+          </marker>
+        </defs>
+
+        <text x="490" y="24" text-anchor="middle" font-size="11" font-weight="600" fill="var(--muted)" letter-spacing="0.06em" font-family="IBM Plex Mono, monospace">ANDROID APP (ON THE VENDING MACHINE)</text>
+
+        <rect x="14" y="150" width="110" height="64" rx="8" fill="none" stroke="currentColor" opacity="0.5"/>
+        <text x="69" y="177" text-anchor="middle" font-size="12" font-weight="600" fill="currentColor">VMC</text>
+        <text x="69" y="193" text-anchor="middle" font-size="10" fill="var(--muted)">MDB bus</text>
+
+        <rect x="164" y="150" width="130" height="64" rx="8" fill="var(--surface)" stroke="currentColor" opacity="0.9"/>
+        <text x="229" y="177" text-anchor="middle" font-size="11.5" font-weight="600" fill="currentColor">MdbSlaveWrapper</text>
+        <text x="229" y="193" text-anchor="middle" font-size="9.5" fill="var(--muted)">bytes + checksum</text>
+
+        <rect x="334" y="140" width="150" height="84" rx="8" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.4"/>
+        <text x="409" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent)">MdbProtocolEngine</text>
+        <text x="409" y="188" text-anchor="middle" font-size="9.5" fill="var(--muted)">state machine</text>
+        <text x="409" y="201" text-anchor="middle" font-size="9.5" fill="var(--muted)">no network knowledge</text>
+
+        <rect x="524" y="140" width="140" height="84" rx="8" fill="var(--surface)" stroke="currentColor" opacity="0.9"/>
+        <text x="594" y="172" text-anchor="middle" font-size="11.5" font-weight="600" fill="currentColor">MdbSlaveActivity</text>
+        <text x="594" y="188" text-anchor="middle" font-size="9.5" fill="var(--muted)">Listener impl</text>
+        <text x="594" y="201" text-anchor="middle" font-size="9.5" fill="var(--muted)">appendLine()</text>
+
+        <rect x="704" y="90" width="110" height="52" rx="8" fill="none" stroke="currentColor" opacity="0.5"/>
+        <text x="759" y="112" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">LogServer</text>
+        <text x="759" y="126" text-anchor="middle" font-size="9" fill="var(--muted)">USB / adb</text>
+
+        <rect x="704" y="212" width="110" height="52" rx="8" fill="var(--surface)" stroke="currentColor" opacity="0.9"/>
+        <text x="759" y="234" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">MqttBridge</text>
+        <text x="759" y="248" text-anchor="middle" font-size="9" fill="var(--muted)">no MDB knowledge</text>
+
+        <rect x="854" y="212" width="112" height="52" rx="8" fill="none" stroke="currentColor" opacity="0.5"/>
+        <text x="910" y="234" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor">broker.hivemq</text>
+        <text x="910" y="248" text-anchor="middle" font-size="9" fill="var(--muted)">.com : 1883</text>
+
+        <line x1="124" y1="172" x2="162" y2="172" stroke="currentColor" marker-end="url(#arrow)"/>
+        <text x="143" y="163" text-anchor="middle" font-size="9" fill="var(--muted)">raw bytes</text>
+
+        <line x1="294" y1="172" x2="332" y2="172" stroke="var(--accent)" marker-end="url(#arrowAccent)"/>
+        <text x="313" y="163" text-anchor="middle" font-size="9" fill="var(--muted)">receiveCommand()</text>
+
+        <line x1="484" y1="172" x2="522" y2="172" stroke="var(--accent)" marker-end="url(#arrowAccent)"/>
+        <text x="503" y="163" text-anchor="middle" font-size="9" fill="var(--muted)">onExchange()</text>
+
+        <line x1="664" y1="150" x2="702" y2="118" stroke="currentColor" marker-end="url(#arrow)"/>
+        <text x="705" y="150" font-size="9" fill="var(--muted)">broadcast()</text>
+
+        <line x1="664" y1="200" x2="702" y2="234" stroke="currentColor" marker-end="url(#arrow)"/>
+        <text x="668" y="270" font-size="9" fill="var(--muted)">publishLog()</text>
+
+        <line x1="814" y1="238" x2="852" y2="238" stroke="currentColor" marker-end="url(#arrow)"/>
+
+        <rect x="854" y="330" width="112" height="52" rx="8" fill="var(--surface)" stroke="currentColor" opacity="0.9"/>
+        <text x="910" y="352" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">PC browser</text>
+        <text x="910" y="366" text-anchor="middle" font-size="9" fill="var(--muted)">log-viewer.html</text>
+
+        <line x1="910" y1="264" x2="910" y2="328" stroke="currentColor" marker-end="url(#arrow)"/>
+        <text x="944" y="300" font-size="9" fill="var(--muted)" text-anchor="middle">liveLog</text>
+
+        <path d="M854,352 C 800,352 780,300 780,264" fill="none" stroke="var(--accent)" stroke-dasharray="4 3" marker-end="url(#arrowAccent)"/>
+        <text x="805" y="300" font-size="9" fill="var(--accent)" text-anchor="middle">commands</text>
+
+        <path d="M704,238 C 660,238 606,222 594,226" fill="none" stroke="var(--accent)" stroke-dasharray="4 3" marker-end="url(#arrowAccent)"/>
+        <text x="655" y="253" font-size="9" fill="var(--accent)" text-anchor="middle">onCommand</text>
+
+        <path d="M524,180 C 480,196 440,196 396,180" fill="none" stroke="var(--accent)" stroke-dasharray="4 3" marker-end="url(#arrowAccent)"/>
+        <text x="460" y="212" font-size="9" fill="var(--accent)" text-anchor="middle">approveVend() / setMdbLevel() / ...</text>
+
+        <rect x="334" y="290" width="300" height="46" rx="8" fill="none" stroke="currentColor" stroke-dasharray="3 3" opacity="0.6"/>
+        <text x="484" y="313" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor">AppSettings · MdbConfig</text>
+        <text x="484" y="326" text-anchor="middle" font-size="9" fill="var(--muted)">SharedPreferences — level, modes, raw response bytes</text>
+        <line x1="450" y1="288" x2="420" y2="226" stroke="currentColor" stroke-dasharray="2 3" opacity="0.6"/>
+        <line x1="520" y1="288" x2="500" y2="256" stroke="currentColor" stroke-dasharray="2 3" opacity="0.6"/>
+
+        <text x="490" y="386" text-anchor="middle" font-size="10" fill="var(--muted)" font-style="italic">solid = real bus / log traffic&#8203;&#160;&#160;&#160;&#160;&#160;dashed = remote control, reverse direction</text>
+      </svg>
+      <figcaption>
+        A remote command arrives as text on the commands topic, becomes a typed method call in the
+        Activity, and only then touches the engine. A bus exchange becomes a log line in the
+        engine, and only the Activity decides it also goes to the screen, LogServer, and MQTT.
+      </figcaption>
+    </figure>
+
+    <div class="callout">
+      <p>
+        <strong>Performance note that shaped this design:</strong> <code class="cmd">appendLine()</code>
+        redraws the entire on-screen TextView from a growing StringBuilder on every call. POLL
+        arrives many times per second, so routing suppressible traffic (idle ACKs, unhandled
+        commands, other peripherals' bytes) to the screen froze the app on real hardware. The
+        engine therefore passes <code class="cmd">showOnScreen=false</code> for those lines — they
+        still reach MQTT/LogServer for debugging, but never the device display.
+      </p>
+    </div>
+  </section>
+
+  <section id="engine">
+    <h2><span class="eyebrow">05 — the actual brain</span>Inside the protocol engine</h2>
+    <p>
+      Two threads run while the port is open. The <strong>bus thread</strong>
+      (<code class="cmd">MdbSlaveLoop</code>, urgent priority) does nothing but
+      read one command → <code class="cmd">processCommand()</code> → send the response — the VMC
+      allows only a few milliseconds between its command and our answer, and setup commands arrive
+      back-to-back, so after every command the loop spins hot for a 15&nbsp;ms burst window
+      instead of sleeping (Android's 1&nbsp;ms sleep routinely oversleeps to 10–20&nbsp;ms, which
+      was enough for real machines to discard our READER CONFIG responses and loop the handshake).
+      Everything else — hex log formatting, listener callbacks, vend callbacks, status JSON, MQTT
+      enqueueing, the 3-second heartbeat — is pushed onto a bounded queue and executed in order by
+      the <strong>offload thread</strong> (<code class="cmd">MdbOffload</code>), so no bookkeeping
+      can ever sit inside the reply window. Every received command passes three gates, in
+      this exact order:
+    </p>
+    <ol>
+      <li><strong>Address filter.</strong> First byte outside
+      <code class="cmd">0x10</code>–<code class="cmd">0x17</code> means the VMC is talking to some
+      other peripheral (coin changer, bill validator…). Never answered; optionally logged as
+      "ignored — other peripheral" when unhandled-visibility is on.</li>
+      <li><strong>Global RESET.</strong> <code class="cmd">0x10</code> from <em>any</em> state:
+      reply ACK, jump to INACTIVE_STATE, reset the JUST RESET counter to 0 so the next POLLs get a
+      genuine fresh announcement (up to 5 of them). Handled once, before the per-state dispatch,
+      so no state can ever forget it. The re-announcements are only a nudge for a VMC that ignored
+      the first one: the moment any setup command is answered, JUST RESET is marked consumed and
+      never repeats — re-announcing it mid-handshake makes the VMC restart setup in a loop
+      (observed on real hardware).</li>
+      <li><strong>Per-state dispatch.</strong> <code class="cmd">when(mdbState)</code>, and inside
+      INACTIVE_STATE a second dispatch <code class="cmd">when(mdbLevel)</code> into one of three
+      dedicated setup handlers — <code class="cmd">processInactiveStateLevel1/2/3()</code>. Each is
+      a self-contained switch with no level checks inside it.</li>
+    </ol>
+    <p>
+      Every branch ends by setting a <code class="cmd">sent</code> label, which drives exactly one
+      of three logging outcomes: a normal line, a suppressible ACK (shown only if POLL visibility
+      is on), or — when no branch matched — an UNHANDLED line (shown only if unhandled visibility
+      is on). "We answered but hid it" and "we didn't answer at all" are therefore always
+      distinguishable in the remote log.
+    </p>
+
+    <figure>
+      <svg viewBox="0 0 980 560" role="img" aria-label="State diagram: INACTIVE_STATE transitions to DISABLED_STATE on one of three commands depending on configured level — SETUP MAX/MIN PRICES at Level 1, EXPANSION REQUEST ID at Level 2, or EXPANSION ENABLE OPTIONS at Level 3. DISABLED_STATE transitions to ENABLED_STATE on READER ENABLE. ENABLED_STATE transitions to VEND_STATE on BEGIN SESSION, or directly on a VEND REQUEST if Level 3's Always Idle bit is declared. VEND_STATE returns to ENABLED_STATE on END SESSION. RESET from any of the four states jumps directly back to INACTIVE_STATE and restarts the JUST RESET handshake.">
+        <defs>
+          <marker id="arrow2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+          </marker>
+          <marker id="arrow2accent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--err)"/>
+          </marker>
+          <marker id="arrow2warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/>
+          </marker>
+        </defs>
+
+        <rect x="30" y="170" width="170" height="110" rx="10" fill="var(--surface)" stroke="currentColor" stroke-width="1.3"/>
+        <text x="115" y="200" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">INACTIVE_STATE</text>
+        <text x="115" y="218" text-anchor="middle" font-size="9.5" fill="var(--muted)">power-on, RESET, JUST RESET</text>
+
+        <rect x="330" y="170" width="170" height="110" rx="10" fill="var(--surface)" stroke="currentColor" stroke-width="1.3"/>
+        <text x="415" y="200" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">DISABLED_STATE</text>
+        <text x="415" y="218" text-anchor="middle" font-size="9.5" fill="var(--muted)">configured, not selling yet</text>
+
+        <rect x="630" y="170" width="170" height="110" rx="10" fill="var(--surface)" stroke="currentColor" stroke-width="1.3"/>
+        <text x="715" y="200" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">ENABLED_STATE</text>
+        <text x="715" y="218" text-anchor="middle" font-size="9.5" fill="var(--muted)">waiting for a card tap</text>
+
+        <rect x="780" y="400" width="170" height="90" rx="10" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.4"/>
+        <text x="865" y="430" text-anchor="middle" font-size="13" font-weight="700" fill="var(--accent)">VEND_STATE</text>
+        <text x="865" y="448" text-anchor="middle" font-size="9.5" fill="var(--muted)">session live, item selection</text>
+
+        <line x1="200" y1="195" x2="328" y2="195" stroke="currentColor" marker-end="url(#arrow2)"/>
+        <text x="264" y="188" text-anchor="middle" font-size="9.5" fill="var(--muted)">SETUP MAX/MIN — Level 1</text>
+
+        <line x1="200" y1="225" x2="328" y2="225" stroke="currentColor" marker-end="url(#arrow2)"/>
+        <text x="264" y="218" text-anchor="middle" font-size="9.5" fill="var(--muted)">EXPANSION REQUEST ID — Level 2</text>
+
+        <line x1="200" y1="255" x2="328" y2="255" stroke="currentColor" marker-end="url(#arrow2)"/>
+        <text x="264" y="248" text-anchor="middle" font-size="9.5" fill="var(--muted)">EXPANSION ENABLE OPTIONS — Level 3</text>
+
+        <text x="115" y="260" text-anchor="middle" font-size="9" fill="var(--muted)">POLL → ACK (idle)</text>
+
+        <line x1="500" y1="225" x2="628" y2="225" stroke="currentColor" marker-end="url(#arrow2)"/>
+        <text x="564" y="215" text-anchor="middle" font-size="9.5" fill="var(--muted)">READER ENABLE</text>
+
+        <path d="M790,268 C 810,320 830,360 850,398" fill="none" stroke="var(--accent)" marker-end="url(#arrow2)"/>
+        <text x="845" y="330" text-anchor="middle" font-size="9.5" fill="var(--muted)">BEGIN SESSION</text>
+        <text x="845" y="342" text-anchor="middle" font-size="9" fill="var(--muted)">(via POLL)</text>
+
+        <path d="M700,280 C 660,350 680,400 778,432" fill="none" stroke="var(--warn)" stroke-dasharray="5 3" marker-end="url(#arrow2warn)"/>
+        <text x="655" y="380" text-anchor="middle" font-size="9.5" fill="var(--warn)">VEND REQUEST</text>
+        <text x="655" y="392" text-anchor="middle" font-size="9" fill="var(--warn)">"Always Idle" — Level 3, opt-in</text>
+
+        <path d="M780,410 C 740,360 720,300 705,282" fill="none" stroke="currentColor" marker-end="url(#arrow2)"/>
+        <text x="640" y="345" text-anchor="middle" font-size="9.5" fill="var(--muted)">END SESSION</text>
+
+        <path d="M715,168 C 550,50 280,50 130,168" fill="none" stroke="var(--err)" stroke-width="1.3" marker-end="url(#arrow2accent)"/>
+        <path d="M865,398 C 700,20 260,20 130,168" fill="none" stroke="var(--err)" stroke-width="1.3" marker-end="url(#arrow2accent)"/>
+        <text x="500" y="36" text-anchor="middle" font-size="10.5" fill="var(--err)" font-weight="600">RESET (0x10) — from ANY state, checked before the per-state dispatch</text>
+      </svg>
+      <figcaption>
+        The four states, all forward transitions with the exact command that triggers each, and
+        the two special paths: global RESET (red) and the opt-in Level 3 "Always Idle" shortcut
+        (amber, dashed).
+      </figcaption>
+    </figure>
+  </section>
+
+  <section id="handshake">
+    <h2><span class="eyebrow">06 — byte by byte</span>The setup handshake, per level</h2>
+    <p>
+      This is the exact conversation from power-on to "ready to sell", per configured level.
+      <span style="color:var(--rx); font-weight:600;">RX</span> is what the VMC sends;
+      <span style="color:var(--tx); font-weight:600;">TX</span> is our reply. Trailing checksums
+      omitted — the wrapper appends the 8-bit-sum CHK byte to every multi-byte reply; bare ACK is
+      a single byte with no checksum, per spec.
+    </p>
+
+    <h3>Level 1 <span class="pill l1">shortest — no EXPANSION commands exist</span></h3>
+    <div class="table-wrap"><table class="seq">
+      <thead><tr><th>Dir</th><th>Bytes</th><th>Meaning</th><th>Engine action</th></tr></thead>
+      <tbody>
+        <tr class="dir-rx"><td>RX</td><td class="mono">10</td><td>RESET</td><td>ACK · counter reset · <span class="pill state">INACTIVE</span></td></tr>
+        <tr class="dir-rx"><td>RX</td><td class="mono">12</td><td>POLL (repeats)</td><td class="note">TX JUST RESET (00), up to 5 times, until SETUP arrives; plain ACK after that</td></tr>
+        <tr class="dir-rx"><td>RX</td><td class="mono">11 00 …</td><td>SETUP CONFIG DATA</td><td>TX READER CONFIG DATA (01 + level/currency/scale/timeout/options) — <em>no state change</em></td></tr>
+        <tr class="dir-rx transition"><td>RX</td><td class="mono">11 01 …</td><td>SETUP MAX/MIN PRICES</td><td>ACK · <strong>→ <span class="pill state">DISABLED</span></strong> (last setup step at L1)</td></tr>
+        <tr class="dir-rx transition"><td>RX</td><td class="mono">14 01</td><td>READER ENABLE</td><td>ACK · <strong>→ <span class="pill state">ENABLED</span></strong> · auto-mode arms BEGIN SESSION</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Level 2 <span class="pill l2">adds EXPANSION REQUEST ID</span></h3>
+    <div class="table-wrap"><table class="seq">
+      <thead><tr><th>Dir</th><th>Bytes</th><th>Meaning</th><th>Engine action</th></tr></thead>
+      <tbody>
+        <tr><td colspan="4" class="note">RESET / JUST RESET / SETUP CONFIG DATA — identical to Level 1</td></tr>
+        <tr class="dir-rx"><td>RX</td><td class="mono">11 01 …</td><td>SETUP MAX/MIN PRICES</td><td>ACK — <em>stays INACTIVE, one more step to go</em></td></tr>
+        <tr class="dir-rx transition"><td>RX</td><td class="mono">17 00</td><td>EXPANSION REQUEST ID</td><td>TX PERIPHERAL ID (09 + mfr 3 + serial 12 + model 12 + sw ver 2 = 29 data bytes) · <strong>→ <span class="pill state">DISABLED</span></strong></td></tr>
+        <tr class="dir-rx"><td>RX</td><td class="mono">17 00</td><td class="note">retries of the same command</td><td class="note">re-answered every time, no state change — real VMCs resend this and stall if any retry goes unanswered (observed on hardware)</td></tr>
+        <tr class="dir-rx transition"><td>RX</td><td class="mono">14 01</td><td>READER ENABLE</td><td>ACK · <strong>→ <span class="pill state">ENABLED</span></strong></td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>Level 3 <span class="pill l3">adds EXPANSION ENABLE OPTIONS + feature bytes</span></h3>
+    <div class="table-wrap"><table class="seq">
+      <thead><tr><th>Dir</th><th>Bytes</th><th>Meaning</th><th>Engine action</th></tr></thead>
+      <tbody>
+        <tr><td colspan="4" class="note">RESET / JUST RESET / SETUP CONFIG DATA / SETUP MAX/MIN — as Level 2</td></tr>
+        <tr class="dir-rx"><td>RX</td><td class="mono">17 00</td><td>EXPANSION REQUEST ID</td><td>TX PERIPHERAL ID with <strong>4 extra feature-bits bytes</strong> (Z31–Z34, 33 data bytes total) — <em>stays INACTIVE</em></td></tr>
+        <tr class="dir-rx transition"><td>RX</td><td class="mono">17 04 Y2..Y5</td><td>EXPANSION ENABLE OPTIONS</td><td>ACK · <strong>→ <span class="pill state">DISABLED</span></strong> (last setup step at L3)</td></tr>
+        <tr class="dir-rx transition"><td>RX</td><td class="mono">14 01</td><td>READER ENABLE</td><td>ACK · <strong>→ <span class="pill state">ENABLED</span></strong></td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="callout warn">
+      <p>
+        <strong>The feature-bits bytes are the truth, not a setting.</strong> Per the MDB/ICP spec
+        (§7.4.4), the 32 optional-feature bits are sent MSB-first: Z31 carries bits 31–24 and
+        <strong>Z34 — the last byte — carries bits 7–0</strong>, which are the only ones currently
+        defined (b0 FTL, b1 32-bit money, b2 multi-currency, b3 negative vend, b4 data entry,
+        <strong>b5 Always Idle</strong>, b6 remote vend, b7 basket). The engine's
+        <code class="cmd">alwaysIdleDeclared()</code> reads bit 5 of Z34 directly out of the
+        <code class="cmd">READER_CONFIG_INFO_L3</code> hex in MdbConfig — to enable Always Idle you
+        edit that byte (e.g. set it to <code class="cmd">20</code>) in the Config panel. There is
+        deliberately no separate toggle that could disagree with what's declared on the wire. All
+        four bytes default to <code class="cmd">00</code>: zero optional features claimed.
+      </p>
+    </div>
+  </section>
+
+  <section id="vend">
+    <h2><span class="eyebrow">07 — the money path</span>One vend, start to finish</h2>
+    <p>
+      Everything below happens in <span class="pill state">ENABLED</span> /
+      <span class="pill state">VEND</span>. The slave never initiates — every TX below is the
+      answer to a POLL or a direct command. Pending flags (<code class="cmd">sessionBeginPending</code>,
+      <code class="cmd">vendApprovePending</code>, <code class="cmd">sessionCancelPending</code>,
+      <code class="cmd">endSessionPending</code>) are armed by events and consumed by the next POLL.
+    </p>
+    <div class="table-wrap"><table class="seq">
+      <thead><tr><th>#</th><th>Dir</th><th>Bytes</th><th>What happens</th></tr></thead>
+      <tbody>
+        <tr class="dir-rx"><td>1</td><td class="mono">RX 12</td><td>POLL</td><td>sessionBeginPending is armed (auto-mode, or the Begin Session button) → TX <strong>BEGIN SESSION</strong> (03 + funds — 3 bytes at L1, 10 at L2/3) · → <span class="pill state">VEND</span></td></tr>
+        <tr class="dir-rx"><td>2</td><td class="mono">RX 13 00 PH PL</td><td>VEND REQUEST</td><td>ACK · price bytes stored · <code class="cmd">vendRequestReceived = true</code>. Customer picked an item; VMC asks permission.</td></tr>
+        <tr><td>3</td><td class="mono">—</td><td>operator</td><td><code class="cmd">vendApprove</code> arrives (button / remote). Accepted only because a request is pending — otherwise rejected outright, never queued, so it can't auto-approve the next customer's item.</td></tr>
+        <tr class="dir-rx"><td>4</td><td class="mono">RX 12</td><td>POLL</td><td>TX <strong>VEND APPROVED</strong> (05 + the stored price). Flags cleared so a stale approval can't fire twice.</td></tr>
+        <tr class="dir-rx"><td>5</td><td class="mono">RX 13 02</td><td>VEND SUCCESS</td><td>ACK — product was dispensed.</td></tr>
+        <tr class="dir-rx"><td>6</td><td class="mono">RX 13 04</td><td>SESSION COMPLETE</td><td>ACK · <code class="cmd">endSessionPending = true</code>.</td></tr>
+        <tr class="dir-rx"><td>7</td><td class="mono">RX 12</td><td>POLL</td><td>TX <strong>END SESSION</strong> (07) · → <span class="pill state">ENABLED</span> · auto-mode re-arms for the next cycle.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>The exits that aren't a sale</h3>
+    <ul>
+      <li><strong>Cancel (either side):</strong> the VMC's VEND CANCEL (<code class="cmd">13 01</code>)
+      or our <code class="cmd">cancelVend</code> arms <code class="cmd">sessionCancelPending</code>;
+      the next POLL gets exactly the configured response — SESSION CANCEL REQUEST
+      (<code class="cmd">04</code>) or VEND DENIED (<code class="cmd">06</code>), no substitution —
+      and the vend cycle's price/flags are wiped.</li>
+      <li><strong>VEND FAILURE (<code class="cmd">13 03</code>):</strong> ACK immediately (refund
+      handshake); the idle-POLL default ACK covers the "refund done" phase. No real refund logic
+      exists yet — only the wire handshake.</li>
+      <li><strong>Mode switch mid-session:</strong> flipping auto↔manual while a session is live
+      immediately cancels it, so the new mode takes effect on the next session instead of being
+      silently ignored; flipping while merely ENABLED arms/disarms
+      <code class="cmd">sessionBeginPending</code> on the spot.</li>
+      <li><strong>Always Idle (L3, bit declared):</strong> step 1 is skipped entirely — a VEND
+      REQUEST arriving straight in ENABLED is ACKed and enters VEND directly.</li>
+      <li><strong>REVALUE (Level 2/3, in-session):</strong> REVALUE LIMIT REQUEST
+      (<code class="cmd">15 01</code>) is answered with REVALUE LIMIT AMOUNT straight from the
+      <code class="cmd">REVALUE_LIMIT</code> config; a REVALUE REQUEST (<code class="cmd">15 00</code>,
+      the VMC wanting to credit funds onto the media) is always answered REVALUE DENIED
+      (<code class="cmd">0E</code>, config-editable) — this device is a gateway-backed payment
+      reader, not a stored-value card. At Level 1 the command doesn't exist and stays unhandled.</li>
+    </ul>
+  </section>
+
+  <section id="level">
+    <h2><span class="eyebrow">08 — one setting, real divergence</span>What the level actually changes</h2>
+    <p>
+      The level isn't cosmetic — it changes which commands exist at all. It's selected on the PC
+      page, persisted on the device, and implemented as <strong>three separate setup switches</strong>
+      (<code class="cmd">processInactiveStateLevel1/2/3()</code>) dispatched by one
+      <code class="cmd">when(mdbLevel)</code>; everything after DISABLED_STATE is shared because it
+      genuinely doesn't differ.
+    </p>
+    <div class="table-wrap"><table>
+      <thead><tr><th></th><th>Level 1</th><th>Level 2</th><th>Level 3</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Reported in READER CONFIG DATA</strong></td><td class="mono">01</td><td class="mono">02</td><td class="mono">03</td></tr>
+        <tr><td><strong>INACTIVE→DISABLED happens at</strong></td><td>SETUP MAX/MIN</td><td>EXPANSION REQUEST ID</td><td>EXPANSION ENABLE OPTIONS</td></tr>
+        <tr><td><strong>EXPANSION REQUEST ID / PERIPHERAL ID</strong></td><td>doesn't exist</td><td>29 data bytes</td><td>33 data bytes (adds Z31–Z34 feature bits)</td></tr>
+        <tr><td><strong>EXPANSION ENABLE OPTIONS (17 04)</strong></td><td>doesn't exist</td><td>doesn't exist</td><td>ACKed; final setup step</td></tr>
+        <tr><td><strong>BEGIN SESSION payload</strong></td><td>default 3 bytes (code + funds)</td><td colspan="2">default 10 bytes (adds payment media ID ×4, payment type, payment data ×2) — the spec's "L2/L3 Standard". Both payloads' LENGTH is editable (1–35 bytes): some feature-level-2 machines only accept the short Level-1-style form, so you can store exactly the bytes your machine wants.</td></tr>
+        <tr><td><strong>REVALUE (15 00 / 15 01)</strong></td><td>doesn't exist</td><td colspan="2">15 01 → REVALUE LIMIT AMOUNT from the REVALUE_LIMIT config; 15 00 → REVALUE DENIED (config-editable)</td></tr>
+        <tr><td><strong>Always Idle (VEND REQUEST direct from ENABLED)</strong></td><td>never</td><td>never</td><td>only if Z34 bit 5 is set in the declared hex</td></tr>
+        <tr><td><strong>Config rows shown on the PC page</strong></td><td colspan="3">The Config panel hides every row that doesn't exist at the selected level — e.g. at Level 1 you see no Peripheral ID, no Revalue Limit, and only the 3-byte Begin Session.</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="callout">
+      <p>
+        <strong>Retry tolerance in DISABLED_STATE, learned from hardware:</strong> real VMCs keep
+        resending setup commands even after they were answered, and won't send READER ENABLE
+        until <em>every</em> one gets a reply. Machines also don't agree on the ORDER: one real
+        machine sends SETUP CONFIG → EXPANSION REQUEST ID → <em>then</em> SETUP MAX/MIN, so a
+        SETUP command can legitimately arrive after we already moved to DISABLED. So
+        DISABLED_STATE re-answers <strong>every</strong> setup command without changing state —
+        SETUP CONFIG DATA (<code class="cmd">11 00</code>), SETUP MAX/MIN
+        (<code class="cmd">11 01</code>), EXPANSION REQUEST ID (<code class="cmd">17 00</code>),
+        EXPANSION ENABLE OPTIONS (<code class="cmd">17 04</code>) — and only genuinely unexpected
+        traffic stays UNHANDLED.
+      </p>
+    </div>
+  </section>
+
+  <section id="files">
+    <h2><span class="eyebrow">09 — where things live</span>File map</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>File</th><th>Responsibility</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">MdbProtocolEngine.kt</td><td>The state machine of sections 05–08. No android.* networking imports; talks only to MdbSlaveWrapper, MdbConfig, AppSettings, and its Listener.</td></tr>
+        <tr><td class="mono">MdbSlaveActivity.kt</td><td>UI + wiring + remote-command parsing. The only file that imports both the engine and MqttBridge.</td></tr>
+        <tr><td class="mono">MdbSlaveWrapper.kt <em>(device)</em></td><td>Real CM30 I/O. Computes and appends the CHK byte; every payload fetched fresh from MdbConfig per send.</td></tr>
+        <tr><td class="mono">MdbSlaveWrapper.kt <em>(simulator)</em></td><td>Scripted fake VMC (full handshake + looping vend cycle) so the engine runs on any emulator. Same API.</td></tr>
+        <tr><td class="mono">MqttBridge.kt</td><td>MQTT 3.1.1 by hand. Per-device topics; background-thread publishes; 3 s reconnect loop.</td></tr>
+        <tr><td class="mono">LogServer.kt</td><td>Local WebSocket mirror of the log stream for USB-tethered debugging.</td></tr>
+        <tr><td class="mono">AppSettings.kt</td><td>SharedPreferences: session mode, cancel mode, MDB level, traffic-visibility flags.</td></tr>
+        <tr><td class="mono">MdbConfig.kt</td><td>SharedPreferences: the raw hex of every response payload, length-locked, remotely editable — including the L3 feature bits that gate Always Idle.</td></tr>
+        <tr><td class="mono">log-viewer.html</td><td>The PC control surface. Subscribes to all devices' logs, commands the selected one, renders level-aware config rows, and treats device acks — not sends — as success.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+</main>
+
+<footer>
+  CM30 MDB Slave project. Current as of app v2.13.4 (build 52) / mdb-lib 6.4.1: two-thread timing
+  engine (bus + offload), JUST RESET consumed once setup starts, order-independent setup retries,
+  REVALUE handling, and variable-length BEGIN SESSION payloads. Handshakes and bit layouts
+  verified against the MDB/ICP v4.3 specification and against real machine traces.
+</footer>

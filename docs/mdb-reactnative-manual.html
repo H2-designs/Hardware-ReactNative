@@ -1,0 +1,348 @@
+<title>MDB React Native Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f4ef; --surface: #ffffff; --surface-2: #eeece4; --border: #ddd8cc;
+    --text: #262320; --muted: #6f6a60;
+    --accent: #0d7fa6; --accent-soft: rgba(13,127,166,0.10);
+    --ok: #1f8a4c; --ok-soft: rgba(31,138,76,0.10);
+    --warn: #a8710a; --warn-soft: rgba(168,113,10,0.12);
+    --err: #b23b3b; --err-soft: rgba(178,59,59,0.10);
+    --mono-chip: #efece2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b0e12; --surface: #12161c; --surface-2: #171d25; --border: #232a33;
+      --text: #d7e0ea; --muted: #8ea0b5;
+      --accent: #35c7ff; --accent-soft: rgba(53,199,255,0.12);
+      --ok: #6fe89a; --ok-soft: rgba(111,232,154,0.10);
+      --warn: #e8c766; --warn-soft: rgba(232,199,102,0.12);
+      --err: #e86f6f; --err-soft: rgba(232,111,111,0.10);
+      --mono-chip: #1a2029;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0e12; --surface: #12161c; --surface-2: #171d25; --border: #232a33;
+    --text: #d7e0ea; --muted: #8ea0b5;
+    --accent: #35c7ff; --accent-soft: rgba(53,199,255,0.12);
+    --ok: #6fe89a; --ok-soft: rgba(111,232,154,0.10);
+    --warn: #e8c766; --warn-soft: rgba(232,199,102,0.12);
+    --err: #e86f6f; --err-soft: rgba(232,111,111,0.10);
+    --mono-chip: #1a2029;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, Segoe UI, sans-serif; line-height: 1.6;
+  }
+  ::selection { background: var(--accent-soft); }
+  code, .mono { font-family: 'IBM Plex Mono', Consolas, monospace; }
+
+  header.top {
+    position: sticky; top: 0; z-index: 10; background: var(--surface);
+    border-bottom: 1px solid var(--border); padding: 14px 24px;
+    display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap;
+  }
+  header.top .title { font-weight: 700; font-size: 15px; letter-spacing: 0.01em; }
+  header.top nav { display: flex; gap: 14px; flex-wrap: wrap; }
+  header.top nav a {
+    color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500;
+    border-bottom: 1px solid transparent; padding-bottom: 2px;
+  }
+  header.top nav a:hover, header.top nav a:focus-visible { color: var(--accent); border-bottom-color: var(--accent); }
+
+  main { max-width: 880px; margin: 0 auto; padding: 44px 24px 96px; }
+  h1 { font-size: 29px; font-weight: 700; text-wrap: balance; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); font-size: 16px; max-width: 66ch; margin: 0 0 40px; }
+  h2 {
+    font-size: 21px; font-weight: 700; margin: 60px 0 6px; padding-top: 8px;
+    letter-spacing: -0.005em; scroll-margin-top: 70px; text-wrap: balance;
+  }
+  h2 .eyebrow {
+    display: block; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500;
+    color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px;
+  }
+  h3 { font-size: 15.5px; font-weight: 600; margin: 30px 0 8px; }
+  h3 code { background: var(--mono-chip); padding: 2px 8px; border-radius: 5px; font-size: 14px; }
+  p { margin: 0 0 14px; max-width: 72ch; }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 5px; max-width: 68ch; }
+  strong { font-weight: 600; }
+  a { color: var(--accent); }
+
+  pre {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.55; margin: 0 0 18px;
+  }
+  pre code { background: none; padding: 0; }
+  p code, li code, td code {
+    background: var(--mono-chip); padding: 1.5px 6px; border-radius: 5px; font-size: 0.88em;
+  }
+
+  .tablewrap { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--border); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; background: var(--surface); }
+  th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--muted); font-weight: 600; padding: 9px 14px; background: var(--surface-2);
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { white-space: nowrap; }
+
+  .callout {
+    border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    background: var(--surface); border-radius: 0 8px 8px 0;
+    padding: 12px 16px; margin: 0 0 18px; font-size: 14px;
+  }
+  .callout.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .callout.ok { border-left-color: var(--ok); background: var(--ok-soft); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  .pill {
+    display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+    font-weight: 600; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em;
+  }
+  .pill.event { background: var(--accent-soft); color: var(--accent); }
+  .pill.opt { background: var(--warn-soft); color: var(--warn); }
+
+  footer {
+    max-width: 880px; margin: 0 auto; padding: 0 24px 48px;
+    color: var(--muted); font-size: 12.5px;
+  }
+</style>
+
+<header class="top">
+  <span class="title">react-native-mdb</span>
+  <nav>
+    <a href="#install">Install</a>
+    <a href="#quickstart">Quick start</a>
+    <a href="#payments">Payments</a>
+    <a href="#functions">Functions</a>
+    <a href="#events">Events</a>
+    <a href="#configs">Hex configs</a>
+    <a href="#dashboard">Dashboard</a>
+    <a href="#demo">Demo app</a>
+  </nav>
+</header>
+
+<main>
+  <h1>MDB React Native Manual</h1>
+  <p class="lede">
+    <code>react-native-mdb</code> puts the complete CM30 MDB Cashless Device stack behind a JavaScript
+    API: the proven <code>mdb-lib</code> and <code>mqtt-lib</code> Kotlin libraries ship inside the
+    package, and every native function and callback is mirrored 1:1 as a JS function or event.
+    Android-only &mdash; the CM30 hardware runtime is armeabi-v7a.
+  </p>
+
+  <h2 id="install"><span class="eyebrow">01 &middot; Setup</span>Install</h2>
+  <pre><code>npm install &lt;path-to&gt;/react-native-mdb    # or publish to your own registry</code></pre>
+  <p>
+    Autolinking registers the native module &mdash; no <code>settings.gradle</code> or
+    <code>MainApplication</code> edits. Two requirements in your app's <code>android/build.gradle</code>:
+  </p>
+  <ul>
+    <li><code>minSdkVersion = 30</code> &mdash; the CM30 terminal runs Android 11 and the AARs are built for it.</li>
+    <li>Nothing else. The three AARs (<code>mdb-lib-6.4.1</code>, <code>mqtt-lib-1.1.0</code>,
+        <code>CM30-HardwareLibrary-1.0.9</code>) are bundled inside the package's <code>android/libs</code>.</li>
+  </ul>
+  <div class="callout warn">
+    <p><strong>Local development note.</strong> If you install the library from a local folder that sits
+    <em>outside</em> your app directory (a <code>file:</code> dependency), Metro needs to be told where it
+    lives &mdash; see the demo's <code>metro.config.js</code> (<code>watchFolders</code> +
+    <code>resolver.nodeModulesPaths</code>). A normal registry install needs none of this.</p>
+  </div>
+
+  <h2 id="quickstart"><span class="eyebrow">02 &middot; Boot</span>Quick start</h2>
+  <pre><code>import Mdb from 'react-native-mdb';
+
+const deviceId = await Mdb.getSuggestedDeviceId(); // last 6 of ANDROID_ID, uppercased
+Mdb.initMqtt('cm30-mdb/hamdan-rabbah', deviceId);  // OPTIONAL - see below
+Mdb.startMqtt();
+Mdb.initMdb();
+Mdb.startMdb();</code></pre>
+  <p>
+    Order matters only in one place: call <code>initMqtt</code> <em>before</em> <code>initMdb</code> if you
+    want the dashboard link, so the MDB engine can register its command listener on the live connection.
+  </p>
+  <div class="callout ok">
+    <p><strong>MQTT is optional.</strong> Skip <code>initMqtt</code>/<code>startMqtt</code> entirely and the
+    MDB engine runs fully offline &mdash; vending, events, settings and configs all work. Log lines simply
+    stay on-device. Nothing throws.</p>
+  </div>
+
+  <h2 id="payments"><span class="eyebrow">03 &middot; Money</span>The payment flow</h2>
+  <p>Four events cover the whole life of a transaction:</p>
+  <pre><code>Mdb.setCancelMode('vendDenied');   // once ever - persisted across restarts
+
+const subs = [
+  Mdb.onVendRequest(async ({ amount, minorUnits, itemNumber }) => {
+    // minorUnits = 350  -> EXACT integer halalas. Send THIS to the gateway.
+    // amount     = 3.5  -> decimal, display only: amount.toFixed(2)
+    const ok = await gateway.authorize(minorUnits);
+    if (ok) await Mdb.approveVend();
+    else    await Mdb.cancelVend();          // sends the standing cancel mode
+  }),
+  Mdb.onVendSuccess(({ itemNumber }) => gateway.capture()),  // product dispensed
+  Mdb.onVendFailure(() => gateway.refund()),                 // jam - customer got nothing
+  Mdb.onSessionEnded(() => clearTransactionState()),         // fires after EVERY outcome
+];
+// on unmount: subs.forEach(s => s.remove());</code></pre>
+  <ul>
+    <li><strong>onVendRequest</strong> &mdash; the customer picked an item. The machine is now waiting for
+        your answer; authorize the payment and reply with <code>approveVend()</code> or
+        <code>cancelVend()</code>. Scale factor and decimal places from <code>READER_CONFIG_DATA</code> are
+        already applied &mdash; no math on your side.</li>
+    <li><strong>onVendSuccess</strong> &mdash; the machine confirmed the product physically dispensed.
+        This is the capture point.</li>
+    <li><strong>onVendFailure</strong> &mdash; the machine reported the vend failed after approval
+        (jam, empty column). The customer got nothing: refund or void.</li>
+    <li><strong>onSessionEnded</strong> &mdash; the session closed, on every path (success, failure,
+        cancel, timeout). Per-transaction cleanup goes here.</li>
+  </ul>
+  <p>
+    <code>cancelVend()</code> uses the standing mode set once via
+    <code>setCancelMode('sessionCancel' | 'vendDenied')</code>.
+    For a one-off override, use <code>cancelVendWith(mode)</code> without touching the standing setting.
+  </p>
+
+  <h2 id="functions"><span class="eyebrow">04 &middot; API</span>Functions</h2>
+  <p>
+    Everything mirrors the Kotlin API &mdash; and every remote dashboard command has a function twin here,
+    so a fully manual app (no dashboard at all) can do everything.
+  </p>
+
+  <h3>MQTT <span class="pill opt">optional</span></h3>
+  <div class="tablewrap"><table>
+    <tr><th>Function</th><th>What it does</th></tr>
+    <tr><td><code>initMqtt(prefix, deviceId)</code></td><td>Configure the broker link. Topics become <code>&lt;prefix&gt;/&lt;deviceId&gt;/liveLog</code> and <code>.../commands</code>.</td></tr>
+    <tr><td><code>startMqtt()</code> / <code>stopMqtt()</code></td><td>Open / close the connection (auto-reconnects while started).</td></tr>
+    <tr><td><code>mqttEnqueue(line)</code></td><td>Push your own log line onto the shared outbound queue. No-op if MQTT was never initialized.</td></tr>
+    <tr><td><code>isMqttConnected()</code></td><td>Resolves <code>true</code> while the socket is live.</td></tr>
+  </table></div>
+
+  <h3>MDB lifecycle</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Function</th><th>What it does</th></tr>
+    <tr><td><code>initMdb()</code></td><td>One-time engine init (idempotent). Wires events, restores persisted settings, publishes the settings snapshot if MQTT is up.</td></tr>
+    <tr><td><code>startMdb()</code> / <code>stopMdb()</code></td><td>Start / stop the poll worker that talks to the vending machine.</td></tr>
+  </table></div>
+
+  <h3>Vend actions</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Function</th><th>What it does</th></tr>
+    <tr><td><code>beginSession()</code></td><td>Open a session manually (only meaningful when auto-session is off and state is ENABLED).</td></tr>
+    <tr><td><code>approveVend()</code></td><td>Answer a pending VEND REQUEST with VEND APPROVED. Resolves <code>false</code> if nothing is pending.</td></tr>
+    <tr><td><code>cancelVend()</code></td><td>Deny using the standing cancel mode (set once via <code>setCancelMode</code>).</td></tr>
+    <tr><td><code>cancelVendWith(mode)</code></td><td>One-time explicit deny: <code>'sessionCancel'</code> or <code>'vendDenied'</code>.</td></tr>
+  </table></div>
+
+  <h3>State</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Function</th><th>What it does</th></tr>
+    <tr><td><code>getCurrentState()</code></td><td>Resolves <code>'INACTIVE_STATE' | 'DISABLED_STATE' | 'ENABLED_STATE' | 'VEND_STATE'</code>.</td></tr>
+    <tr><td><code>isSessionActive()</code></td><td>Resolves <code>true</code> while a session is open.</td></tr>
+  </table></div>
+
+  <h3>Settings <span class="pill opt">persisted</span></h3>
+  <p>Each setter also syncs the dashboard instantly (settings snapshot over MQTT) &mdash; both sides always agree.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Function</th><th>What it does</th></tr>
+    <tr><td><code>setCancelMode(mode)</code></td><td>Standing deny mode for <code>cancelVend()</code>: <code>'sessionCancel' | 'vendDenied'</code>.</td></tr>
+    <tr><td><code>setAutoSession(bool)</code> / <code>isAutoSession()</code></td><td>Auto-open a session whenever the machine enables the reader. Switching modes mid-session cancels/re-arms cleanly.</td></tr>
+    <tr><td><code>setMdbLevel(1|2|3)</code></td><td>Which MDB level handshake the device speaks. Level&nbsp;3 Always&nbsp;Idle comes from bit&nbsp;5 of the last byte of <code>READER_CONFIG_INFO_L3</code> &mdash; not from a setting.</td></tr>
+    <tr><td><code>setMqttLogging(bool)</code></td><td>Mute / unmute the MDB log stream over MQTT. Commands, status and config sync stay alive either way.</td></tr>
+    <tr><td><code>setPollVisibility(bool)</code></td><td>Whether per-poll lines are marked for on-screen display (they always stay off-screen-list to avoid UI freezes).</td></tr>
+    <tr><td><code>setUnhandledVisibility(bool)</code></td><td>Same, for unhandled-command lines.</td></tr>
+    <tr><td><code>getSettingsJson()</code></td><td>Resolves the full settings snapshot as JSON.</td></tr>
+  </table></div>
+
+  <h3>Price helpers</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Function</th><th>What it does</th></tr>
+    <tr><td><code>priceToAmount(raw)</code></td><td>Raw 16-bit VMC price &rarr; decimal display amount (scale &times; decimal places applied).</td></tr>
+    <tr><td><code>priceToMinorUnits(raw)</code></td><td>Raw price &rarr; exact integer minor units. Pure integer math &mdash; use for payments.</td></tr>
+  </table></div>
+  <p>You rarely need these directly: <code>onVendRequest</code> already delivers both forms.</p>
+
+  <h3>Helpers</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Function</th><th>What it does</th></tr>
+    <tr><td><code>getSuggestedDeviceId()</code></td><td>Last 6 chars of ANDROID_ID, uppercased &mdash; the exact scheme the dashboard's device dropdown expects.</td></tr>
+  </table></div>
+
+  <h2 id="events"><span class="eyebrow">05 &middot; API</span>Events</h2>
+  <p>Each subscription returns an object with <code>.remove()</code> &mdash; always unsubscribe on unmount.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Event</th><th>Payload</th><th>When</th></tr>
+    <tr><td><span class="pill event">onVendRequest</span></td><td><code>{ amount, minorUnits, itemNumber }</code></td><td>Customer picked an item; the machine is waiting for approve/deny.</td></tr>
+    <tr><td><span class="pill event">onVendSuccess</span></td><td><code>{ itemNumber }</code></td><td>Product physically dispensed &mdash; capture the payment.</td></tr>
+    <tr><td><span class="pill event">onVendFailure</span></td><td>&mdash;</td><td>Vend failed after approval &mdash; refund.</td></tr>
+    <tr><td><span class="pill event">onSessionEnded</span></td><td>&mdash;</td><td>Session closed, on every outcome &mdash; cleanup.</td></tr>
+    <tr><td><span class="pill event">onLog</span></td><td><code>{ line, showOnScreen }</code></td><td>Every engine log line. Never render <code>showOnScreen: false</code> lines into a growing list.</td></tr>
+    <tr><td><span class="pill event">onStatus</span></td><td><code>{ json }</code></td><td>VMC status &mdash; instantly on every state change, plus a 3-second heartbeat.</td></tr>
+    <tr><td><span class="pill event">onRemoteCommand</span></td><td><code>{ command }</code></td><td>A dashboard command the MDB engine did not recognize &mdash; your app's own custom commands arrive here.</td></tr>
+  </table></div>
+
+  <h2 id="configs"><span class="eyebrow">06 &middot; Payloads</span>Hex configs</h2>
+  <p>
+    Every reply payload the device sends on the bus is editable at runtime &mdash; from JS here, or from the
+    dashboard; both paths write the same store and every change re-syncs the dashboard's Config panel.
+  </p>
+  <pre><code>import Mdb, { ConfigName } from 'react-native-mdb';
+
+const hex  = await Mdb.getConfigHex(ConfigName.READER_CONFIG_INFO_L3);
+const err  = await Mdb.setConfigHex(ConfigName.SESSION_BEGIN, '03 FF FF');
+if (err) console.warn('rejected:', err);   // resolves null on success, else the reason
+await Mdb.resetConfig(ConfigName.SESSION_BEGIN);          // back to the built-in default
+const names = await Mdb.configNames();                    // all editable payload names
+const snap  = await Mdb.configSnapshotJson();             // full JSON snapshot</code></pre>
+  <p>
+    Lengths are locked to the protocol &mdash; a wrong-length hex string is rejected with a clear message,
+    never silently truncated &mdash; with one exception: the two BEGIN SESSION payloads accept any length
+    from 1 to 35 bytes, because some feature-level-2 machines only accept the short Level-1-style 3-byte
+    form (<code>03 FF FF</code>). Available names on <code>ConfigName</code>:
+    <code>JUST_RESET</code>, <code>CAN</code>, <code>READER_CONFIG_DATA</code>,
+    <code>READER_CONFIG_INFO</code>, <code>READER_CONFIG_INFO_L3</code>, <code>VEND_APPROVED</code>,
+    <code>VEND_DENIED</code>, <code>END_SESSION</code>, <code>SESSION_CANCEL</code>,
+    <code>SESSION_BEGIN</code>, <code>SESSION_BEGIN_L2</code>, <code>REVALUE_LIMIT</code>,
+    <code>REVALUE_DENIED</code> (the reply to a REVALUE REQUEST &mdash; default <code>0E</code>, denied).
+  </p>
+
+  <h2 id="dashboard"><span class="eyebrow">07 &middot; Ops</span>Dashboard</h2>
+  <p>
+    The same <code>dashboard/log-viewer.html</code> used with the native app works unchanged &mdash; the
+    wire protocol is identical. Open it in any browser, pick the device from the dropdown, and every
+    remote command (level select, session mode, cancel mode, config edits, MQTT log mute, ping) runs in
+    parallel with your JS calls: both paths execute the same Kotlin code and stay in sync.
+  </p>
+
+  <h2 id="demo"><span class="eyebrow">08 &middot; Reference</span>Demo app &amp; building</h2>
+  <p>
+    <code>MdbDemo/App.tsx</code> is the reference integration: live state badge, capped inverted log list,
+    and a vend approval sheet showing both <code>amount</code> and <code>minorUnits</code>.
+  </p>
+  <pre><code>cd MdbDemo
+npm install
+cd android && ./gradlew assembleRelease
+# -> android/app/build/outputs/apk/release/app-release.apk  (standalone, no Metro needed)</code></pre>
+  <p>For development with hot reload: <code>npm start</code> in one terminal, <code>npm run android</code> in another.</p>
+
+  <h3>Folder map</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Path</th><th>Contents</th></tr>
+    <tr><td><code>react-native-mdb/</code></td><td>The library: JS API, TypeScript typings, native bridge, bundled AARs.</td></tr>
+    <tr><td><code>MdbDemo/</code></td><td>The demo app (React Native 0.87).</td></tr>
+    <tr><td><code>MdbRnDemo-v1.0.0-release.apk</code></td><td>Prebuilt release APK of the demo.</td></tr>
+    <tr><td><code>dashboard/log-viewer.html</code></td><td>The live MQTT dashboard.</td></tr>
+    <tr><td><code>docs/</code></td><td>This manual, plus the native library manual, architecture doc and vend simulator.</td></tr>
+    <tr><td><code>README.md</code></td><td>Short version of this manual.</td></tr>
+  </table></div>
+</main>
+
+<footer>
+  react-native-mdb v1.0.0 &middot; wraps mdb-lib 6.4.1 + mqtt-lib 1.1.0 + CM30-HardwareLibrary 1.0.9 &middot; Android / armeabi-v7a
+</footer>
