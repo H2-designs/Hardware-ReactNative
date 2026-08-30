@@ -211,6 +211,7 @@
     <a href="#components">Components</a>
     <a href="#remote">Remote protocol</a>
     <a href="#flow">Data flow</a>
+    <a href="#logs">Log pipeline</a>
     <a href="#engine">Protocol engine</a>
     <a href="#handshake">Handshakes</a>
     <a href="#vend">Vend cycle</a>
@@ -245,8 +246,8 @@
     </ul>
     <p>
       Inside the app, the core rule is: <strong>the MDB protocol engine and the MQTT client never
-      reference each other.</strong> <code class="cmd">MdbProtocolEngine</code> has no network
-      imports; <code class="cmd">MqttBridge</code> has no MDB knowledge. The single place they
+      reference each other.</strong> <code class="cmd">MdbLib</code> (mdb-lib) has no network
+      imports beyond the queue handoff; <code class="cmd">MqttLib</code> (mqtt-lib) has no MDB knowledge. The single place they
       meet is <code class="cmd">MdbSlaveActivity</code>, which implements the engine's
       <code class="cmd">Listener</code> interface on one side and owns the MQTT callbacks on the
       other.
@@ -257,46 +258,32 @@
     <h2><span class="eyebrow">02 — who owns what</span>Components</h2>
     <div class="card-grid">
       <div class="card">
-        <h4>MdbProtocolEngine.kt</h4>
-        <p>The full slave state machine: 4 states, per-level setup handshakes, the vend cycle,
-        global RESET. Runs one worker thread. Reports outward only via
-        <code class="cmd">Listener.onExchange()</code> / <code class="cmd">onVmcStatus()</code>.</p>
+        <h4>MdbLib.kt  (mdb-lib)</h4>
+        <p>The full slave state machine: 4 states, per-level setup handshakes, the vend cycle, global RESET, REVALUE. Two threads: the urgent-priority bus loop (receive - dispatch - send, nothing else) and the offload thread that runs all logging, listeners and vend callbacks.</p>
       </div>
       <div class="card">
-        <h4>MdbSlaveActivity.kt</h4>
-        <p>The only coordinator. Implements the engine's Listener, owns
-        <code class="cmd">appendLine()</code> (screen + LogServer + MQTT), parses every remote
-        command string into an engine/config method call. Contains zero protocol logic.</p>
+        <h4>MdbSlaveActivity.kt  (app)</h4>
+        <p>The thin reference integration. Wires MqttLib + MdbLib at startup and mirrors logListener/statusListener to the screen. Contains zero protocol logic; any Android app would look like this.</p>
       </div>
       <div class="card">
-        <h4>MdbSlaveWrapper.kt (×2 flavors)</h4>
-        <p><code class="cmd">device</code>: real CM30 hardware I/O. <code class="cmd">simulator</code>:
-        scripted fake VMC for emulators. Identical API. Both compute the MDB checksum (8-bit sum,
-        appended as last byte) and fetch every payload fresh from MdbConfig on each send.</p>
+        <h4>MdbSlaveWrapper.kt  (mdb-lib)</h4>
+        <p>The CM30 hardware transport: reads frames from the vendor runtime, computes the MDB checksum (8-bit sum, appended as last byte), sends the response BEFORE any logging, and fetches every payload fresh from MdbConfigStore on each send.</p>
       </div>
       <div class="card">
-        <h4>MqttBridge.kt</h4>
-        <p>Hand-rolled MQTT 3.1.1 client (CONNECT / PUBLISH QoS 0 / SUBSCRIBE / PINGREQ — no
-        library). Auto-reconnects every 3 s on drop. All socket writes happen on background
-        threads so UI-thread callers can never hit NetworkOnMainThreadException.</p>
+        <h4>MqttLib.kt  (mqtt-lib)</h4>
+        <p>Hand-rolled MQTT 3.1.1 client (CONNECT with optional username/password, PUBLISH QoS 0, SUBSCRIBE, PINGREQ - no third-party library). One bounded queue, one publisher thread as the only socket writer, auto-reconnect, command listener chain. Knows nothing about MDB.</p>
       </div>
       <div class="card">
-        <h4>MdbConfig.kt</h4>
-        <p>The wire payloads themselves — every response's raw bytes, persisted in
-        SharedPreferences, editable live from the PC page via
-        <code class="cmd">setConfig:NAME:hex</code>. Length is locked per name; only values
-        change.</p>
+        <h4>MdbConfigStore.kt  (mdb-lib)</h4>
+        <p>The wire payloads themselves - every response’s raw bytes, persisted in SharedPreferences, editable live from Android or the dashboard. Length locked per name, except the two Begin Session payloads (1–35 bytes freely editable).</p>
       </div>
       <div class="card">
-        <h4>AppSettings.kt</h4>
-        <p>Persisted behavior flags: session-begin mode (auto/manual), VMC-cancel response mode,
-        MDB level (1/2/3), POLL and unhandled-traffic visibility. Loaded once at startup into the
-        engine.</p>
+        <h4>MdbSettings.kt  (mdb-lib)</h4>
+        <p>Persisted behavior flags: session-begin mode (auto/manual), VMC-cancel response mode, MDB level (1/2/3), MQTT log muting, and the three visibility switches (POLL, unhandled, other-peripheral). Loaded once at startup into the engine.</p>
       </div>
       <div class="card">
-        <h4>LogServer.kt</h4>
-        <p>Local WebSocket server for the USB/adb-forward path — receives the same log lines as
-        MQTT, for bench use with a cable instead of the internet.</p>
+        <h4>RabbahLog + RabbahMqtt  (mqtt-lib)</h4>
+        <p>The compact log layer: RabbahLog turns every event into one codebook-coded JSON item; RabbahMqtt is the generic app-facing surface - sendLog/sendError, onCommand, sendText/sendJson/subscribeText/subscribeJson on any topic - with zero MDB involvement.</p>
       </div>
       <div class="card">
         <h4>log-viewer.html</h4>
@@ -332,6 +319,8 @@
         <tr><td class="mono">VMC_STATUS:</td><td>Every 3 s, plus immediately on open/close</td><td><code class="cmd">{"state":"ENABLED_STATE","recentActivity":true}</code> — drives the colored VMC bar; recentActivity = bus traffic seen within 5 s.</td></tr>
         <tr><td class="mono">SETTINGS_JSON:</td><td>On boot and after every setting change</td><td>All persisted settings, so the PC controls always show the device's real values, never assumed defaults.</td></tr>
         <tr><td class="mono">CONFIG_JSON:</td><td>On <code class="cmd">getConfig</code> and after every setConfig/resetConfig</td><td>Every payload name → current hex string, used to populate the Config editor.</td></tr>
+        <tr><td class="mono">RABBAH_LOG:</td><td>every log line, continuously</td><td>One compact JSON item per event — <code class="cmd">{"t","s","m","a","v","k","i","d","p"}</code>: timestamp, schema, message code, app, version, severity, session id, delivery, positional params. The sentence is NOT on the wire — the dashboard reconstructs it from the codebook, so both sides always render identical text.</td></tr>
+        <tr><td class="mono">CODEBOOK_JSON:</td><td>reply to <code class="cmd">getCodebook</code></td><td>This build's full decode dictionary — every schema/code with its eventName, template and paramCount, so dashboard decode tables can never drift from the emitting device.</td></tr>
         <tr><td class="mono">PONG</td><td>Reply to <code class="cmd">ping</code></td><td>Proves the device is alive; the PC page's "connected" state means a real round trip succeeded, not just broker connectivity.</td></tr>
       </tbody>
     </table></div>
@@ -347,7 +336,8 @@
         <tr><td class="mono">cancelVend[:sessionCancel|:vendDenied]</td><td>Cancels the live session on the next POLL, sending exactly the chosen response (or the standing default). No-op if no session is active.</td></tr>
         <tr><td class="mono">setCancelMode:sessionCancel|vendDenied</td><td>Standing default used by plain cancelVend and by the VMC's own VEND CANCEL (13H 01H).</td></tr>
         <tr><td class="mono">setMdbLevel:1|2|3</td><td>Selects which handshake variant, which BEGIN SESSION payload, and which PERIPHERAL ID payload are used (see <a href="#level">Levels</a>).</td></tr>
-        <tr><td class="mono">setPollVisibility / setUnhandledVisibility :on|off</td><td>Whether idle POLL→ACK and unrecognized commands appear in the remote log. Either way they never touch the on-device screen (see performance note below).</td></tr>
+        <tr><td class="mono">setPollVisibility / setUnhandledVisibility / setPeripheralVisibility :on|off</td><td>Three independent log-debug switches: idle POLL→ACK, commands addressed to us we could not answer, and traffic addressed to OTHER peripherals (coin changer, bill validator). Separate flags so "cashless + unhandled only" is a real combination; none of them ever touch the on-device screen (see performance note below). The dashboard adds its own client-side "Cashless only" filter on top, which works with any device build.</td></tr>
+        <tr><td class="mono">getCodebook</td><td>Requests the CODEBOOK_JSON decode dictionary above.</td></tr>
         <tr><td class="mono">getSettings / getConfig / ping</td><td>Request the corresponding tagged message above.</td></tr>
         <tr><td class="mono">setConfig:NAME:hex / resetConfig:NAME</td><td>Edit or reset one wire payload in MdbConfig. Length-validated on the device; the device's own ack line ("NAME updated → …" or a specific error) is what the PC shows — success is never assumed.</td></tr>
       </tbody>
@@ -359,11 +349,11 @@
     <p>
       Bus traffic flows left to right; remote commands flow right to left along the dashed arrows.
       The engine's only outward surface is the two Listener callbacks — it cannot name MQTT,
-      LogServer, or the screen.
+      the log layer, or the screen.
     </p>
 
     <figure>
-      <svg viewBox="0 0 980 400" role="img" aria-label="Data flows from the VMC hardware bus through MdbSlaveWrapper into MdbProtocolEngine, which reports exchanges through a Listener callback to MdbSlaveActivity; the Activity fans that out to LogServer and MqttBridge, and MqttBridge relays to the PC control page over a public broker. Remote commands from the PC page flow the same path in reverse, arriving at the Activity and being translated into engine method calls.">
+      <svg viewBox="0 0 980 400" role="img" aria-label="Data flows from the VMC hardware bus through MdbSlaveWrapper into MdbLib, which pushes every exchange onto the offload queue; from there lines fan out to RabbahLog (codebook items) and to MqttLib, which relays to the PC control page over the broker. Remote commands from the PC page flow the reverse path: MqttLib receives them and the registered command listeners translate them into engine calls.">
         <defs>
           <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -384,7 +374,7 @@
         <text x="229" y="193" text-anchor="middle" font-size="9.5" fill="var(--muted)">bytes + checksum</text>
 
         <rect x="334" y="140" width="150" height="84" rx="8" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.4"/>
-        <text x="409" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent)">MdbProtocolEngine</text>
+        <text x="409" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent)">MdbLib (engine)</text>
         <text x="409" y="188" text-anchor="middle" font-size="9.5" fill="var(--muted)">state machine</text>
         <text x="409" y="201" text-anchor="middle" font-size="9.5" fill="var(--muted)">no network knowledge</text>
 
@@ -394,11 +384,11 @@
         <text x="594" y="201" text-anchor="middle" font-size="9.5" fill="var(--muted)">appendLine()</text>
 
         <rect x="704" y="90" width="110" height="52" rx="8" fill="none" stroke="currentColor" opacity="0.5"/>
-        <text x="759" y="112" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">LogServer</text>
-        <text x="759" y="126" text-anchor="middle" font-size="9" fill="var(--muted)">USB / adb</text>
+        <text x="759" y="112" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">RabbahLog</text>
+        <text x="759" y="126" text-anchor="middle" font-size="9" fill="var(--muted)">codebook items</text>
 
         <rect x="704" y="212" width="110" height="52" rx="8" fill="var(--surface)" stroke="currentColor" opacity="0.9"/>
-        <text x="759" y="234" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">MqttBridge</text>
+        <text x="759" y="234" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">MqttLib</text>
         <text x="759" y="248" text-anchor="middle" font-size="9" fill="var(--muted)">no MDB knowledge</text>
 
         <rect x="854" y="212" width="112" height="52" rx="8" fill="none" stroke="currentColor" opacity="0.5"/>
@@ -439,7 +429,7 @@
         <text x="460" y="212" font-size="9" fill="var(--accent)" text-anchor="middle">approveVend() / setMdbLevel() / ...</text>
 
         <rect x="334" y="290" width="300" height="46" rx="8" fill="none" stroke="currentColor" stroke-dasharray="3 3" opacity="0.6"/>
-        <text x="484" y="313" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor">AppSettings · MdbConfig</text>
+        <text x="484" y="313" text-anchor="middle" font-size="10.5" font-weight="600" fill="currentColor">MdbSettings · MdbConfigStore</text>
         <text x="484" y="326" text-anchor="middle" font-size="9" fill="var(--muted)">SharedPreferences — level, modes, raw response bytes</text>
         <line x1="450" y1="288" x2="420" y2="226" stroke="currentColor" stroke-dasharray="2 3" opacity="0.6"/>
         <line x1="520" y1="288" x2="500" y2="256" stroke="currentColor" stroke-dasharray="2 3" opacity="0.6"/>
@@ -449,7 +439,7 @@
       <figcaption>
         A remote command arrives as text on the commands topic, becomes a typed method call in the
         Activity, and only then touches the engine. A bus exchange becomes a log line in the
-        engine, and only the Activity decides it also goes to the screen, LogServer, and MQTT.
+        engine, and only the Activity decides it also goes to the screen and MQTT.
       </figcaption>
     </figure>
 
@@ -460,13 +450,62 @@
         arrives many times per second, so routing suppressible traffic (idle ACKs, unhandled
         commands, other peripherals' bytes) to the screen froze the app on real hardware. The
         engine therefore passes <code class="cmd">showOnScreen=false</code> for those lines — they
-        still reach MQTT/LogServer for debugging, but never the device display.
+        still reach MQTT for debugging, but never the device display.
       </p>
     </div>
   </section>
 
+  <section id="logs">
+    <h2><span class="eyebrow">05 — one envelope for every log</span>The compact log pipeline</h2>
+    <p>
+      Log lines are no longer free text. Every event — each bus exchange from mdb-lib
+      automatically, and anything the host app reports — becomes ONE compact JSON item through
+      <code class="cmd">RabbahLog</code> (in mqtt-lib), which rides the same bounded queue as
+      everything else:
+    </p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Key</th><th>Carries</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">t</td><td>epoch millis, as a string</td></tr>
+        <tr><td class="mono">s / m</td><td>schema ("MDB", "INFO") + message code — together they index the codebook entry whose template renders the sentence</td></tr>
+        <tr><td class="mono">a / v</td><td>emitting app name + version, stamped once via <code class="cmd">RabbahLog.init()</code></td></tr>
+        <tr><td class="mono">k</td><td>severity: i / e / d</td></tr>
+        <tr><td class="mono">i</td><td>session id — armed when SESSION BEGIN ships, cleared after END SESSION, so every log of one vend correlates</td></tr>
+        <tr><td class="mono">d</td><td>1 buffered, 2 instant</td></tr>
+        <tr><td class="mono">p</td><td>positional params; for MDB events p[0] is always the rx frame hex and p[1] our tx reply</td></tr>
+      </tbody>
+    </table></div>
+    <p>
+      The 27 MDB event codes plus INFO_RAW live in <code class="cmd">RabbahLogEvent.kt</code>;
+      <code class="cmd">RabbahCodebook.json()</code> serves the whole dictionary on request
+      (<code class="cmd">getCodebook</code>), and both the on-device screen and the dashboard
+      render through the identical <code class="cmd">format()</code> substitution — the two can
+      never show different wording.
+    </p>
+    <h3>The generic surface for any Android app (no MDB required)</h3>
+    <p>
+      <code class="cmd">RabbahMqtt</code> is the one-stop API when an app just wants the broker:
+      <code class="cmd">sendLog / sendError</code> (enveloped log lines),
+      <code class="cmd">onCommand / removeCommand</code> (the plain-text inbox on the commands
+      topic, first-consume-wins), and <code class="cmd">sendText / sendJson /
+      subscribeText / subscribeJson</code> on any custom channel
+      <code class="cmd">&lt;prefix&gt;/&lt;deviceId&gt;/&lt;suffix&gt;</code>. Everything is
+      queued and offline-buffered; subscriptions re-establish on every reconnect.
+    </p>
+    <h3>Private brokers</h3>
+    <p>
+      <code class="cmd">MqttConfig</code> takes <code class="cmd">username / password</code> for
+      an authenticated broker (e.g. a private mosquitto), and the dashboard points at the same
+      broker over WebSocket via URL parameters —
+      <code class="cmd">log-viewer.html?broker=ws://HOST:9001&amp;user=…&amp;pass=…</code> —
+      persisted in localStorage. <code class="cmd">rabbahlog-sample-v1.1.apk</code> is the proof
+      app: on-screen broker settings, log/telemetry/burst buttons, a live queued/sent/dropped
+      line, and an <code class="cmd">inbox</code> subscription.
+    </p>
+  </section>
+
   <section id="engine">
-    <h2><span class="eyebrow">05 — the actual brain</span>Inside the protocol engine</h2>
+    <h2><span class="eyebrow">06 — the actual brain</span>Inside the protocol engine</h2>
     <p>
       Two threads run while the port is open. The <strong>bus thread</strong>
       (<code class="cmd">MdbSlaveLoop</code>, urgent priority) does nothing but
@@ -574,7 +613,7 @@
   </section>
 
   <section id="handshake">
-    <h2><span class="eyebrow">06 — byte by byte</span>The setup handshake, per level</h2>
+    <h2><span class="eyebrow">07 — byte by byte</span>The setup handshake, per level</h2>
     <p>
       This is the exact conversation from power-on to "ready to sell", per configured level.
       <span style="color:var(--rx); font-weight:600;">RX</span> is what the VMC sends;
@@ -635,7 +674,7 @@
   </section>
 
   <section id="vend">
-    <h2><span class="eyebrow">07 — the money path</span>One vend, start to finish</h2>
+    <h2><span class="eyebrow">08 — the money path</span>One vend, start to finish</h2>
     <p>
       Everything below happens in <span class="pill state">ENABLED</span> /
       <span class="pill state">VEND</span>. The slave never initiates — every TX below is the
@@ -682,7 +721,7 @@
   </section>
 
   <section id="level">
-    <h2><span class="eyebrow">08 — one setting, real divergence</span>What the level actually changes</h2>
+    <h2><span class="eyebrow">09 — one setting, real divergence</span>What the level actually changes</h2>
     <p>
       The level isn't cosmetic — it changes which commands exist at all. It's selected on the PC
       page, persisted on the device, and implemented as <strong>three separate setup switches</strong>
@@ -721,18 +760,18 @@
   </section>
 
   <section id="files">
-    <h2><span class="eyebrow">09 — where things live</span>File map</h2>
+    <h2><span class="eyebrow">10 — where things live</span>File map</h2>
     <div class="table-wrap"><table>
       <thead><tr><th>File</th><th>Responsibility</th></tr></thead>
       <tbody>
-        <tr><td class="mono">MdbProtocolEngine.kt</td><td>The state machine of sections 05–08. No android.* networking imports; talks only to MdbSlaveWrapper, MdbConfig, AppSettings, and its Listener.</td></tr>
-        <tr><td class="mono">MdbSlaveActivity.kt</td><td>UI + wiring + remote-command parsing. The only file that imports both the engine and MqttBridge.</td></tr>
-        <tr><td class="mono">MdbSlaveWrapper.kt <em>(device)</em></td><td>Real CM30 I/O. Computes and appends the CHK byte; every payload fetched fresh from MdbConfig per send.</td></tr>
-        <tr><td class="mono">MdbSlaveWrapper.kt <em>(simulator)</em></td><td>Scripted fake VMC (full handshake + looping vend cycle) so the engine runs on any emulator. Same API.</td></tr>
-        <tr><td class="mono">MqttBridge.kt</td><td>MQTT 3.1.1 by hand. Per-device topics; background-thread publishes; 3 s reconnect loop.</td></tr>
-        <tr><td class="mono">LogServer.kt</td><td>Local WebSocket mirror of the log stream for USB-tethered debugging.</td></tr>
-        <tr><td class="mono">AppSettings.kt</td><td>SharedPreferences: session mode, cancel mode, MDB level, traffic-visibility flags.</td></tr>
-        <tr><td class="mono">MdbConfig.kt</td><td>SharedPreferences: the raw hex of every response payload, length-locked, remotely editable — including the L3 feature bits that gate Always Idle.</td></tr>
+        <tr><td class="mono">mdb-lib / MdbLib.kt</td><td>The state machine of sections 06–09 plus the two-thread pipeline. Talks only to MdbSlaveWrapper, MdbConfigStore, MdbSettings, and the offload queue.</td></tr>
+        <tr><td class="mono">app / MdbSlaveActivity.kt</td><td>The thin reference integration: startup wiring + on-screen log mirror. Any host app replaces this file.</td></tr>
+        <tr><td class="mono">mdb-lib / MdbSlaveWrapper.kt</td><td>Real CM30 I/O. Sends before logging; computes and appends the CHK byte; every payload fetched fresh from MdbConfigStore per send.</td></tr>
+        <tr><td class="mono">mqtt-lib / MqttLib.kt</td><td>MQTT 3.1.1 by hand (optional broker auth). Per-device topics; one bounded queue + one publisher thread; reconnect loop; command listener chain.</td></tr>
+        <tr><td class="mono">mqtt-lib / RabbahLog.kt + RabbahLogEvent.kt</td><td>The compact log envelope and the MDB/INFO codebooks; serves CODEBOOK_JSON on getCodebook.</td></tr>
+        <tr><td class="mono">mqtt-lib / RabbahMqtt.kt</td><td>Generic app-facing API: sendLog/sendError, onCommand, sendText/sendJson/subscribeText/subscribeJson on any topic.</td></tr>
+        <tr><td class="mono">mdb-lib / MdbSettings.kt</td><td>SharedPreferences: session mode, cancel mode, MDB level, MQTT log muting, three traffic-visibility flags.</td></tr>
+        <tr><td class="mono">mdb-lib / MdbConfigStore.kt</td><td>SharedPreferences: the raw hex of every response payload, length-locked (Begin Session 1–35 free), remotely editable — including the L3 feature bits that gate Always Idle.</td></tr>
         <tr><td class="mono">log-viewer.html</td><td>The PC control surface. Subscribes to all devices' logs, commands the selected one, renders level-aware config rows, and treats device acks — not sends — as success.</td></tr>
       </tbody>
     </table></div>
@@ -740,7 +779,7 @@
 </main>
 
 <footer>
-  CM30 MDB Slave project. Current as of app v2.13.4 (build 52) / mdb-lib 6.4.1: two-thread timing
+  CM30 MDB Slave project. Current as of app v2.13.5 (build 53) / mdb-lib 6.4.1 / mqtt-lib 1.2.0: compact RabbahLog codebook envelope, generic RabbahMqtt API, broker auth, two-thread timing
   engine (bus + offload), JUST RESET consumed once setup starts, order-independent setup retries,
   REVALUE handling, and variable-length BEGIN SESSION payloads. Handshakes and bit layouts
   verified against the MDB/ICP v4.3 specification and against real machine traces.

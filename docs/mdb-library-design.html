@@ -668,7 +668,7 @@ MdbLib.vendListener = <span class="k">object</span> : MdbLib.VendListener {
   <section id="api">
     <h2><span class="eyebrow">07 — the contract</span>Public API, as shipped</h2>
 
-    <h3>mqtt-lib (1.1.0)</h3>
+    <h3>mqtt-lib (1.3.0)</h3>
     <pre class="code"><span class="k">class</span> MqttConfig(
     <span class="k">val</span> topicPrefix: String,              <span class="c">// e.g. "cm30-mdb/hamdan-rabbah"</span>
     <span class="k">val</span> deviceId: String,                 <span class="c">// shown on-screen; separates machines</span>
@@ -792,7 +792,7 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
 
     <div class="callout">
       <p>
-        <strong>Artifacts:</strong> <code class="cmd">mqtt-lib-1.1.0.aar</code>,
+        <strong>Artifacts:</strong> <code class="cmd">mqtt-lib-1.3.0.aar</code>,
         <code class="cmd">mdb-lib-6.4.1.aar</code> (plus the bundled CM30 vendor .aar as its
         runtime dependency), the demo APK as the reference integration, and
         <code class="cmd">LIBRARY_README.md</code> for the integrating developer. Wire protocol
@@ -805,5 +805,5 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
 
 <footer>
   CM30 MDB Slave project — library architecture, as built. Current as of mdb-lib 6.4.1 /
-  mqtt-lib 1.1.0 (demo app v2.13.4, build 52).
+  mqtt-lib 1.3.0 (demo app v2.13.6, build 54).
 </footer>

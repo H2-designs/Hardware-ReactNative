@@ -54,7 +54,7 @@ repositories {
 dependencies {
     implementation 'com.facebook.react:react-android'
     api(name: 'mdb-lib-6.4.1', ext: 'aar')
-    api(name: 'mqtt-lib-1.1.0', ext: 'aar')
+    api(name: 'mqtt-lib-1.3.0', ext: 'aar')
     // The CM30 vendor hardware runtime mdb-lib talks to on the real terminal.
     api(name: 'CM30-HardwareLibrary-1.0.9', ext: 'aar')
 }

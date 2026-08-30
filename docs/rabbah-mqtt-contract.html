@@ -1,0 +1,323 @@
+<title>Rabbah Device MQTT Contract</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f4ef; --surface: #ffffff; --surface-2: #eeece4; --border: #ddd8cc;
+    --text: #262320; --muted: #6f6a60;
+    --accent: #0d7fa6; --accent-soft: rgba(13,127,166,0.10);
+    --ok: #1f8a4c; --ok-soft: rgba(31,138,76,0.10);
+    --warn: #a8710a; --warn-soft: rgba(168,113,10,0.12);
+    --err: #b23b3b; --err-soft: rgba(178,59,59,0.10);
+    --mono-chip: #efece2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b0e12; --surface: #12161c; --surface-2: #171d25; --border: #232a33;
+      --text: #d7e0ea; --muted: #8ea0b5;
+      --accent: #35c7ff; --accent-soft: rgba(53,199,255,0.12);
+      --ok: #6fe89a; --ok-soft: rgba(111,232,154,0.10);
+      --warn: #e8c766; --warn-soft: rgba(232,199,102,0.12);
+      --err: #e86f6f; --err-soft: rgba(232,111,111,0.10);
+      --mono-chip: #1a2029;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b0e12; --surface: #12161c; --surface-2: #171d25; --border: #232a33;
+    --text: #d7e0ea; --muted: #8ea0b5;
+    --accent: #35c7ff; --accent-soft: rgba(53,199,255,0.12);
+    --ok: #6fe89a; --ok-soft: rgba(111,232,154,0.10);
+    --warn: #e8c766; --warn-soft: rgba(232,199,102,0.12);
+    --err: #e86f6f; --err-soft: rgba(232,111,111,0.10);
+    --mono-chip: #1a2029;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, Segoe UI, sans-serif; line-height: 1.6;
+  }
+  ::selection { background: var(--accent-soft); }
+  code, .mono { font-family: 'IBM Plex Mono', Consolas, monospace; }
+
+  header.top {
+    position: sticky; top: 0; z-index: 10; background: var(--surface);
+    border-bottom: 1px solid var(--border); padding: 14px 24px;
+    display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap;
+  }
+  header.top .title { font-weight: 700; font-size: 15px; letter-spacing: 0.01em; }
+  header.top nav { display: flex; gap: 14px; flex-wrap: wrap; }
+  header.top nav a {
+    color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 500;
+    border-bottom: 1px solid transparent; padding-bottom: 2px;
+  }
+  header.top nav a:hover, header.top nav a:focus-visible { color: var(--accent); border-bottom-color: var(--accent); }
+
+  main { max-width: 880px; margin: 0 auto; padding: 44px 24px 96px; }
+  h1 { font-size: 29px; font-weight: 700; text-wrap: balance; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); font-size: 16px; max-width: 68ch; margin: 0 0 40px; }
+  h2 {
+    font-size: 21px; font-weight: 700; margin: 60px 0 6px; padding-top: 8px;
+    letter-spacing: -0.005em; scroll-margin-top: 70px; text-wrap: balance;
+  }
+  h2 .eyebrow {
+    display: block; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500;
+    color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px;
+  }
+  h3 { font-size: 15.5px; font-weight: 600; margin: 30px 0 8px; }
+  p { margin: 0 0 14px; max-width: 74ch; }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin-bottom: 6px; max-width: 70ch; }
+  strong { font-weight: 600; }
+
+  .cmd {
+    font-family: 'IBM Plex Mono', monospace; background: var(--mono-chip);
+    padding: 1px 6px; border-radius: 4px; font-size: 0.92em; white-space: nowrap;
+  }
+
+  pre.code {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 15px 17px; overflow-x: auto; font-size: 12.5px; line-height: 1.6;
+    font-family: 'IBM Plex Mono', monospace; margin: 12px 0 22px;
+  }
+  pre.code .k { color: var(--accent); }
+  pre.code .c { color: var(--muted); font-style: italic; }
+  pre.code .s { color: var(--ok); }
+
+  .table-wrap { overflow-x: auto; margin: 16px 0 26px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  td.mono, td code { font-family: 'IBM Plex Mono', monospace; }
+  td code { background: var(--mono-chip); padding: 1px 5px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
+
+  .pill {
+    display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px;
+    font-weight: 600; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; white-space: nowrap;
+  }
+  .pill.in  { background: var(--accent-soft); color: var(--accent); }
+  .pill.out { background: var(--ok-soft); color: var(--ok); }
+  .pill.ret { background: var(--warn-soft); color: var(--warn); }
+
+  .callout {
+    border: 1px solid var(--border); border-left: 3px solid var(--accent);
+    background: var(--surface); border-radius: 0 8px 8px 0;
+    padding: 13px 17px; margin: 18px 0; font-size: 14.5px;
+  }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.err { border-left-color: var(--err); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  footer { max-width: 880px; margin: 0 auto; padding: 0 24px 64px; color: var(--muted); font-size: 12.5px; }
+</style>
+
+<header class="top">
+  <span class="title">RABBAH DEVICE MQTT CONTRACT</span>
+  <nav>
+    <a href="#broker">Broker</a>
+    <a href="#inbound">Inbound</a>
+    <a href="#outbound">Outbound</a>
+    <a href="#codes">Device codes</a>
+    <a href="#mapping">Device-library mapping</a>
+    <a href="#examples">Examples</a>
+  </nav>
+</header>
+
+<main>
+  <h1>Rabbah Device MQTT Contract</h1>
+  <p class="lede">
+    The topic scheme between field devices and the Rabbah backend
+    (<code class="cmd">apps/api</code>, MQTT client id <code class="cmd">legacy-backend</code>).
+    Devices publish logs, acks, progress, and presence; the backend publishes remote commands.
+    Everything is keyed by the human-readable <code class="cmd">{deviceCode}</code>.
+  </p>
+
+  <!-- ============================================================ -->
+  <section id="broker">
+    <h2><span class="eyebrow">01 &middot; where</span>Broker</h2>
+    <pre class="code"><span class="c"># backend .env</span>
+<span class="k">MQTT_URL</span>=<span class="s">mqtt://mosquitto:1883</span>       <span class="c"># in-cluster hostname; plain TCP</span>
+<span class="k">MQTT_USERNAME</span>=<span class="s">rabbah</span>
+<span class="k">MQTT_PASSWORD</span>=<span class="s">********</span>              <span class="c"># real value lives in the backend .env only</span>
+<span class="k">MQTT_CLIENT_ID</span>=<span class="s">legacy-backend</span></pre>
+    <p>
+      The device side connects to the same mosquitto with the same credentials via
+      <code class="cmd">MqttConfig(brokerHost, brokerPort, username, password)</code>; the
+      dashboard reaches it over the WebSocket listener
+      (<code class="cmd">log-viewer.html?broker=ws://HOST:9001&amp;user=…&amp;pass=…</code>).
+    </p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="inbound">
+    <h2><span class="eyebrow">02 &middot; device → backend</span>Inbound (backend subscribes)</h2>
+    <p>
+      The backend subscribes through <code class="cmd">$share/rabbah-api/&lt;topic&gt;</code> —
+      the <code class="cmd">$share/rabbah-api/</code> prefix is only a shared-subscription group
+      name, so when several <code class="cmd">apps/api</code> replicas are running, the broker
+      delivers each message to exactly ONE of them instead of all. <strong>Devices publish to the
+      plain topic</strong> — the prefix never appears in what a device sends.
+    </p>
+    <div class="table-wrap"><table>
+      <thead><tr><th></th><th>Topic</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><span class="pill in">IN</span></td><td class="mono">devices/{deviceCode}/logs</td><td>Single device log</td></tr>
+        <tr><td><span class="pill in">IN</span></td><td class="mono">devices/{deviceCode}/logs/bulk</td><td>Batched device logs</td></tr>
+        <tr><td><span class="pill in">IN</span></td><td class="mono">devices/{deviceCode}/cmd/ack</td><td>Device acknowledges a remote command</td></tr>
+        <tr><td><span class="pill in">IN</span></td><td class="mono">devices/{deviceCode}/cmd/progress</td><td>Remote command progress updates</td></tr>
+        <tr><td><span class="pill ret">IN&nbsp;&middot;&nbsp;retained</span></td><td class="mono">devices/{deviceCode}/status</td><td>Presence — <code>online</code> published as the birth message on connect, <code>offline</code> written by the broker via LWT when the device drops. Retained, so a late subscriber immediately sees the last known state.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="outbound">
+    <h2><span class="eyebrow">03 &middot; backend → device</span>Outbound (backend publishes)</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th></th><th>Topic</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><span class="pill out">OUT</span></td><td class="mono">devices/{deviceCode}/cmd</td><td>Send a remote command to a device</td></tr>
+        <tr><td><span class="pill out">OUT</span></td><td class="mono">dongles/{deviceCode}/cmd</td><td>Send a dongle command — payload is <code>{}</code> for now, per RHT-924</td></tr>
+      </tbody>
+    </table></div>
+    <p>
+      The command round-trip pairs with the inbound side: the backend publishes to
+      <code class="cmd">…/cmd</code>, the device answers on <code class="cmd">…/cmd/ack</code>
+      and streams long-running work on <code class="cmd">…/cmd/progress</code>.
+    </p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="codes">
+    <h2><span class="eyebrow">04 &middot; identity</span>Device codes</h2>
+    <p>
+      <code class="cmd">{deviceCode}</code> is the human-readable code like
+      <code class="cmd">D-0123</code> — <strong>not</strong> the raw integer database id. Every
+      topic in this contract uses it, so a device must know its own code before it can publish
+      or subscribe anywhere.
+    </p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="mapping">
+    <h2><span class="eyebrow">05 &middot; the device side</span>Mapping to mqtt-lib / RabbahMqtt</h2>
+    <p>
+      The device libraries build every topic as
+      <code class="cmd">&lt;topicPrefix&gt;/&lt;deviceId&gt;/&lt;suffix&gt;</code>. Pointing them
+      at this contract is one config line:
+    </p>
+    <pre class="code">MqttLib.init(MqttConfig(
+    topicPrefix        = <span class="s">"devices"</span>,
+    deviceId           = <span class="s">"D-0123"</span>,          <span class="c">// the deviceCode, not ANDROID_ID</span>
+    brokerHost         = <span class="s">"YOUR-SERVER"</span>, brokerPort = 1883,
+    username           = <span class="s">"rabbah"</span>, password = <span class="s">"..."</span>,
+    logTopicSuffix     = <span class="s">"logs"</span>,            <span class="c">// automatic log stream -&gt; devices/D-0123/logs</span>
+    commandTopicSuffix = <span class="s">"cmd"</span>,             <span class="c">// command listener chain &lt;- devices/D-0123/cmd</span>
+    statusTopicSuffix  = <span class="s">"status"</span>           <span class="c">// retained online/offline presence</span>
+))
+
+<span class="c">// the remaining channels line up as plain suffixes:</span>
+RabbahMqtt.sendJson(<span class="s">"logs/bulk"</span>, batch)            <span class="c">// -&gt; devices/D-0123/logs/bulk</span>
+RabbahMqtt.sendJson(<span class="s">"cmd/ack"</span>, ack)                <span class="c">// -&gt; devices/D-0123/cmd/ack</span>
+RabbahMqtt.sendJson(<span class="s">"cmd/progress"</span>, progress)      <span class="c">// -&gt; devices/D-0123/cmd/progress</span>
+<span class="c">// commands from the backend arrive on the normal listener chain:</span>
+<span class="k">val</span> sub = RabbahMqtt.onCommand { cmd -&gt; <span class="c">/* handle, return true to consume */</span> <span class="k">false</span> }</pre>
+    <div class="callout">
+      <p>
+        <strong>Both former gaps are built (mqtt-lib 1.3.0):</strong>
+      </p>
+      <p>
+        1. <strong>Channel suffixes are configurable.</strong>
+        <code class="cmd">logTopicSuffix</code> / <code class="cmd">commandTopicSuffix</code> in
+        <code class="cmd">MqttConfig</code> point the AUTOMATIC log stream and command listener at
+        <code class="cmd">…/logs</code> and <code class="cmd">…/cmd</code>. The defaults stay
+        <code class="cmd">liveLog</code> / <code class="cmd">commands</code>, so every existing
+        device and the dashboard keep working unchanged; the dashboard follows a re-pointed device
+        via <code class="cmd">log-viewer.html?logTopic=logs&amp;cmdTopic=cmd</code>.
+      </p>
+      <p>
+        2. <strong>Presence is implemented.</strong> Setting
+        <code class="cmd">statusTopicSuffix = "status"</code> publishes a RETAINED
+        <code class="cmd">online</code> birth message on every connect, registers an MQTT Last
+        Will so the broker publishes a retained <code class="cmd">offline</code> when the device
+        drops, and a graceful <code class="cmd">MqttLib.stop()</code> publishes the retained
+        <code class="cmd">offline</code> itself (a clean disconnect never fires the Will).
+        Leaving it null (the default) produces no presence traffic at all.
+      </p>
+    </div>
+  </section>
+  <!-- ============================================================ -->
+  <section id="examples">
+    <h2><span class="eyebrow">06 &middot; worked examples</span>One message per topic</h2>
+    <p>
+      Every payload below is real: the log items are exactly what mqtt-lib's
+      <code class="cmd">RabbahLog</code> envelope produces on the device today
+      (<code class="cmd">t/s/m/a/v/k/i/d/p</code>, decoded via the codebook), and the command
+      round-trip shows the shape a device answers with.
+    </p>
+
+    <h3><span class="pill in">IN</span> <code class="cmd">devices/D-0123/logs</code> - single log</h3>
+    <pre class="code"><span class="c">// a vend request as the device ships it (schema MDB, code 13 = MDB_VEND_REQUEST):</span>
+{<span class="s">"t"</span>:<span class="s">"1787743651002"</span>,<span class="s">"s"</span>:<span class="s">"MDB"</span>,<span class="s">"m"</span>:<span class="s">"13"</span>,<span class="s">"a"</span>:<span class="s">"vending-app"</span>,<span class="s">"v"</span>:<span class="s">"2.13.6"</span>,
+ <span class="s">"k"</span>:<span class="s">"i"</span>,<span class="s">"i"</span>:<span class="s">"7c1f2a9b"</span>,<span class="s">"d"</span>:1,<span class="s">"p"</span>:[<span class="s">"13 00 01 5E 00 0C 78"</span>,<span class="s">"ACK"</span>,<span class="s">"350"</span>,<span class="s">"12"</span>]}
+
+<span class="c">// a free-text app log (schema INFO, code 0 = INFO_RAW):</span>
+{<span class="s">"t"</span>:<span class="s">"1787743652390"</span>,<span class="s">"s"</span>:<span class="s">"INFO"</span>,<span class="s">"m"</span>:<span class="s">"0"</span>,<span class="s">"a"</span>:<span class="s">"vending-app"</span>,<span class="s">"v"</span>:<span class="s">"2.13.6"</span>,
+ <span class="s">"k"</span>:<span class="s">"i"</span>,<span class="s">"d"</span>:1,<span class="s">"p"</span>:[<span class="s">"payment gateway responded in 420ms"</span>]}</pre>
+
+    <h3><span class="pill in">IN</span> <code class="cmd">devices/D-0123/logs/bulk</code> - batched logs</h3>
+    <pre class="code"><span class="c">// a JSON array of the same items, oldest first:</span>
+[
+  {<span class="s">"t"</span>:<span class="s">"1787743650120"</span>,<span class="s">"s"</span>:<span class="s">"MDB"</span>,<span class="s">"m"</span>:<span class="s">"8"</span>, <span class="s">"a"</span>:<span class="s">"vending-app"</span>,<span class="s">"v"</span>:<span class="s">"2.13.6"</span>,<span class="s">"k"</span>:<span class="s">"i"</span>,<span class="s">"i"</span>:<span class="s">"7c1f2a9b"</span>,<span class="s">"d"</span>:1,<span class="s">"p"</span>:[<span class="s">"12 12"</span>,<span class="s">"03 FF FF 00 00 00 01 00 00 00"</span>]},
+  {<span class="s">"t"</span>:<span class="s">"1787743651002"</span>,<span class="s">"s"</span>:<span class="s">"MDB"</span>,<span class="s">"m"</span>:<span class="s">"13"</span>,<span class="s">"a"</span>:<span class="s">"vending-app"</span>,<span class="s">"v"</span>:<span class="s">"2.13.6"</span>,<span class="s">"k"</span>:<span class="s">"i"</span>,<span class="s">"i"</span>:<span class="s">"7c1f2a9b"</span>,<span class="s">"d"</span>:1,<span class="s">"p"</span>:[<span class="s">"13 00 01 5E 00 0C 78"</span>,<span class="s">"ACK"</span>,<span class="s">"350"</span>,<span class="s">"12"</span>]}
+]
+
+<span class="c">// device side:  RabbahMqtt.sendJson("logs/bulk", batchArrayAsString)</span></pre>
+
+    <h3><span class="pill out">OUT</span> <code class="cmd">devices/D-0123/cmd</code> - backend sends a command</h3>
+    <pre class="code"><span class="c">// backend publishes (example - the device treats the payload as one command string</span>
+<span class="c">// on its listener chain; JSON config commands work too, exactly like the dashboard's):</span>
+vendApprove
+{ <span class="s">"setConfig"</span>: { <span class="s">"SESSION_BEGIN_L2"</span>: <span class="s">"03 FF FF"</span> } }</pre>
+
+    <h3><span class="pill in">IN</span> <code class="cmd">devices/D-0123/cmd/ack</code> - device acknowledges</h3>
+    <pre class="code"><span class="c">// device side:  RabbahMqtt.sendJson("cmd/ack", ack)</span>
+{<span class="s">"cmd"</span>:<span class="s">"vendApprove"</span>,<span class="s">"ok"</span>:true,<span class="s">"t"</span>:<span class="s">"1787743651900"</span>,<span class="s">"detail"</span>:<span class="s">"VEND APPROVED armed for next POLL"</span>}
+{<span class="s">"cmd"</span>:<span class="s">"setConfig"</span>,<span class="s">"ok"</span>:false,<span class="s">"t"</span>:<span class="s">"1787743652100"</span>,<span class="s">"detail"</span>:<span class="s">"Wrong length for VEND_APPROVED: got 2 byte(s), need 3"</span>}</pre>
+
+    <h3><span class="pill in">IN</span> <code class="cmd">devices/D-0123/cmd/progress</code> - long-running command updates</h3>
+    <pre class="code"><span class="c">// device side:  RabbahMqtt.sendJson("cmd/progress", progress)</span>
+{<span class="s">"cmd"</span>:<span class="s">"firmwareUpdate"</span>,<span class="s">"pct"</span>:40,<span class="s">"t"</span>:<span class="s">"1787743660000"</span>,<span class="s">"stage"</span>:<span class="s">"downloading"</span>}
+{<span class="s">"cmd"</span>:<span class="s">"firmwareUpdate"</span>,<span class="s">"pct"</span>:100,<span class="s">"t"</span>:<span class="s">"1787743699000"</span>,<span class="s">"stage"</span>:<span class="s">"done"</span>}</pre>
+
+    <h3><span class="pill ret">IN &middot; retained</span> <code class="cmd">devices/D-0123/status</code> - presence</h3>
+    <pre class="code"><span class="c">// published automatically by mqtt-lib 1.3.0 when statusTopicSuffix = "status":</span>
+online     <span class="c">// retained birth message, on every connect</span>
+offline    <span class="c">// retained - from the broker's Last Will on a drop, or from a graceful stop()</span></pre>
+
+    <h3><span class="pill out">OUT</span> <code class="cmd">dongles/D-0123/cmd</code> - dongle command</h3>
+    <pre class="code">{}         <span class="c">// payload is empty JSON for now, per RHT-924</span></pre>
+
+    <h3>Testing from a PC</h3>
+    <pre class="code"><span class="c"># watch everything one device says:</span>
+mosquitto_sub -h YOUR-SERVER -u rabbah -P '...' -t 'devices/D-0123/#' -v
+
+<span class="c"># send it a command:</span>
+mosquitto_pub -h YOUR-SERVER -u rabbah -P '...' -t 'devices/D-0123/cmd' -m 'ping'
+<span class="c"># the device answers PONG on its log channel; presence shows instantly because status is retained</span></pre>
+    <p>
+      Note the ack/progress JSON shapes above are the proposed device-side convention (the
+      contract fixes the topics, not the payloads) - if the backend already expects specific
+      field names on <code class="cmd">cmd/ack</code> / <code class="cmd">cmd/progress</code>,
+      those win and the device should mirror them.
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  Rabbah platform — device ⇄ backend MQTT contract, as provided by the backend team. Device side implemented in mqtt-lib 1.3.0 (configurable suffixes + retained presence). Companion
+  docs: the MDB library manual (device-side API) and the MDB Slave architecture reference.
+  Dongle command payload per RHT-924.
+</footer>

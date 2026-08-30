@@ -168,6 +168,7 @@
   .rx { color: #6fb3e8; }
   .info { color: #e8c766; font-style: italic; }
   .cmd { color: #b088e8; }
+  .err { color: #e86f6f; }
   .msg { flex: 1; }
 
   #configBtn { border-color: #4a2a5a; color: #c789e8; }
@@ -363,6 +364,7 @@
     <span class="divider"></span>
     <label class="checkbox-label"><input type="checkbox" id="pollVisibilityCheck"> Show POLL/ACK traffic</label>
     <label class="checkbox-label"><input type="checkbox" id="unhandledVisibilityCheck"> Show unhandled commands</label>
+    <label class="checkbox-label" title="Client-side filter: hides bus traffic addressed to other peripherals (coin changer, bill validator - anything outside 0x10-0x17). Applies to the view only, so it works with any device build; the device also has its own setPeripheralVisibility switch to stop sending them at all."><input type="checkbox" id="cashlessOnlyCheck" checked> Cashless only (hide other peripherals)</label>
   </div>
   <div id="log"></div>
 
@@ -384,8 +386,24 @@
   // label) — this page subscribes to the wildcard so it can see every machine that's online,
   // then scopes all UI/commands to whichever one is selected in the device dropdown.
   const TOPIC_PREFIX = 'cm30-mdb/hamdan-rabbah/';
-  const LOG_TOPIC_FILTER = TOPIC_PREFIX + '+/liveLog';
-  const BROKER_URL = 'wss://broker.hivemq.com:8884/mqtt';
+  const LOG_TOPIC_FILTER = TOPIC_PREFIX + '+/' + LOG_SUFFIX;
+  // Broker override without editing this file: open the page once as
+  //   log-viewer.html?broker=ws://YOUR-SERVER:9001&user=rabbah&pass=SECRET
+  // and the values persist in localStorage for every later visit (query wins over stored).
+  // NOTE: a browser can only speak MQTT over WebSockets — the broker needs a ws(s) listener
+  // (mosquitto: "listener 9001" + "protocol websockets"), not the plain TCP 1883 port.
+  const qs = new URLSearchParams(location.search);
+  function setting(key, def) {
+    const v = qs.get(key);
+    if (v !== null) { localStorage.setItem('cm30-' + key, v); return v; }
+    return localStorage.getItem('cm30-' + key) || def;
+  }
+  const BROKER_URL = setting('broker', 'wss://broker.hivemq.com:8884/mqtt');
+  const MQTT_USER = setting('user', '');
+  const MQTT_PASS = setting('pass', '');
+  // Channel suffixes - override for backend-contract devices: ?logTopic=logs&cmdTopic=cmd
+  const LOG_SUFFIX = setting('logTopic', 'liveLog');
+  const CMD_SUFFIX = setting('cmdTopic', 'commands');
   const LAST_DEVICE_KEY = 'cm30-last-device-id';
 
   const deviceSelectEl = document.getElementById('deviceSelect');
@@ -926,7 +944,7 @@
     if (deviceLinked) return;
     if (currentDeviceId) {
       setStatus('linking', 'linking to device ' + currentDeviceId + '…');
-      client.publish(TOPIC_PREFIX + currentDeviceId + '/commands', 'ping');
+      client.publish(TOPIC_PREFIX + currentDeviceId + '/' + CMD_SUFFIX, 'ping');
     } else {
       setStatus('linking', 'waiting for a device…');
     }
@@ -950,6 +968,53 @@
     // The device now persists these across restarts (see AppSettings.kt) — fetch the real
     // current values instead of leaving the dropdowns on whatever they defaulted to on load.
     sendCommand('getSettings', 'Refresh settings');
+    // Fetch this build's log codebook (silently — it's plumbing, not a user action) so
+    // RABBAH_LOG items decode into sentences. Answered with CODEBOOK_JSON:{...}.
+    if (client.connected && !codebooks[currentDeviceId]) {
+      client.publish(TOPIC_PREFIX + currentDeviceId + '/' + CMD_SUFFIX, 'getCodebook');
+    }
+  }
+
+  // -------- compact Rabbah log items (RABBAH_LOG:) --------
+  // The device emits codes, not sentences; the codebook it serves turns them back. Decode
+  // tables come from the device itself, so they can never drift from the emitting build.
+  const codebooks = {}; // deviceId -> { schema -> { code -> {eventName, template, paramCount} } }
+
+  function applyCodebook(deviceId, json) {
+    try {
+      codebooks[deviceId] = JSON.parse(json);
+    } catch (e) {
+      addLine('-- CODEBOOK_JSON parse error: ' + e.message + ' --');
+    }
+  }
+
+  /** One compact item -> one decoded sentence. Unknown codes (older viewer cache, newer
+   * device) still render as [SCHEMA/code] p0 | p1 — logs are never dropped. */
+  function addCompactLine(json) {
+    let item;
+    try {
+      item = JSON.parse(json);
+    } catch (e) {
+      addLine(json); // not actually JSON — show it raw rather than lose it
+      return;
+    }
+    const p = Array.isArray(item.p) ? item.p : [];
+    const book = codebooks[currentDeviceId];
+    const entry = book && book[item.s] && book[item.s][item.m];
+    let text;
+    if (entry) {
+      text = entry.template.replace(/\{(\d+)\}/g, (m, i) => (p[i] !== undefined ? p[i] : m));
+      if (p.length !== entry.paramCount) {
+        text += '  [malformed: ' + p.length + '/' + entry.paramCount + ' params]';
+      }
+    } else {
+      text = '[' + item.s + '/' + item.m + '] ' + p.join(' | ');
+      if (client.connected && currentDeviceId && !book) {
+        client.publish(TOPIC_PREFIX + currentDeviceId + '/' + CMD_SUFFIX, 'getCodebook');
+      }
+    }
+    if (item.i) text += '   #' + item.i; // session id — same tag across one whole vend
+    addLine(text, item.k === 'e' ? 'err' : (item.k === 'd' ? '' : 'rx'));
   }
 
   /** Sets the two mode dropdowns to whatever the device actually reports, from a "SETTINGS_JSON:"
@@ -1015,7 +1080,20 @@
     }, VMC_STATUS_STALE_MS);
   }
 
+  // A real machine polls its coin changer and bill validator many times a second. Those lines
+  // are useful once and noise forever after, so the view drops them by default - filtering here
+  // (not just at the device) means it works against a device build that still sends them.
+  const cashlessOnlyEl = document.getElementById('cashlessOnlyCheck');
+  function isOtherPeripheralLine(text) {
+    return text.indexOf('other peripheral') !== -1 || text.indexOf('OTHER PERIPHERAL') !== -1;
+  }
+
   function addLine(text, cls) {
+    if (cashlessOnlyEl && cashlessOnlyEl.checked && isOtherPeripheralLine(text)) {
+      hiddenCount++;
+      countEl.textContent = lineCount + ' lines' + (hiddenCount ? '  (' + hiddenCount + ' hidden)' : '');
+      return;
+    }
     const row = document.createElement('div');
     row.className = 'line';
 
@@ -1034,12 +1112,13 @@
     logEl.scrollTop = logEl.scrollHeight;
 
     lineCount++;
-    countEl.textContent = lineCount + ' lines';
+    countEl.textContent = lineCount + ' lines' + (hiddenCount ? '  (' + hiddenCount + ' hidden)' : '');
   }
 
   document.getElementById('clearBtn').onclick = () => {
     logEl.innerHTML = '';
     lineCount = 0;
+    hiddenCount = 0;
     countEl.textContent = '0 lines';
   };
 
@@ -1047,6 +1126,8 @@
   const client = mqtt.connect(BROKER_URL, {
     clientId: 'cm30-viewer-' + Math.random().toString(16).slice(2),
     reconnectPeriod: 2000,
+    username: MQTT_USER || undefined,
+    password: MQTT_PASS || undefined,
   });
 
   client.on('connect', () => {
@@ -1088,6 +1169,14 @@
       applyVmcStatus(text.slice('VMC_STATUS:'.length));
       return; // a periodic heartbeat, not a real MDB exchange — kept out of the scrolling log
     }
+    if (text.startsWith('CODEBOOK_JSON:')) {
+      applyCodebook(fromDevice, text.slice('CODEBOOK_JSON:'.length));
+      return; // decode plumbing, not a log line
+    }
+    if (text.startsWith('RABBAH_LOG:')) {
+      addCompactLine(text.slice('RABBAH_LOG:'.length));
+      return; // decoded into a sentence by the codebook
+    }
     handleConfigAck(text);
     addLine(text);
   });
@@ -1095,7 +1184,7 @@
   function sendCommand(cmd, label) {
     if (!client.connected) { addLine('-- not connected, command not sent: ' + cmd + ' --'); return; }
     if (!currentDeviceId) { addLine('-- no device selected, command not sent: ' + cmd + ' --'); return; }
-    client.publish(TOPIC_PREFIX + currentDeviceId + '/commands', cmd);
+    client.publish(TOPIC_PREFIX + currentDeviceId + '/' + CMD_SUFFIX, cmd);
     addLine('[sent] ' + label, 'cmd');
   }
 

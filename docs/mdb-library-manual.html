@@ -128,7 +128,7 @@
     The complete developer manual for <code class="cmd">mdb-lib</code> and
     <code class="cmd">mqtt-lib</code>: every function with a working example, every dashboard
     command, and what actually happens inside when you call each one. Current as of
-    mdb-lib&nbsp;6.4.1 / mqtt-lib&nbsp;1.1.0.
+    mdb-lib&nbsp;6.4.1 / mqtt-lib&nbsp;1.3.0.
   </p>
 
   <!-- ============================================================ -->
@@ -136,7 +136,7 @@
     <h2><span class="eyebrow">01</span>Getting started</h2>
     <p>Add the AARs (or the Gradle modules) and initialize once at app startup:</p>
     <pre class="code"><span class="c">// build.gradle (raw AARs; skip if using the Gradle modules directly)</span>
-implementation files(<span class="s">'libs/mqtt-lib-1.1.0.aar'</span>)
+implementation files(<span class="s">'libs/mqtt-lib-1.3.0.aar'</span>)
 implementation files(<span class="s">'libs/mdb-lib-6.4.1.aar'</span>)
 implementation files(<span class="s">'libs/CM30-HardwareLibrary-1.0.9.aar'</span>)  <span class="c">// mdb-lib's hardware runtime</span></pre>
 
@@ -453,33 +453,95 @@ MdbLib.setConfigHex(MdbLib.ConfigName.READER_CONFIG_INFO_L3,
 
   <!-- ============================================================ -->
   <section id="mqtt">
-    <h2><span class="eyebrow">08</span>MqttLib for your own use</h2>
+    <h2><span class="eyebrow">08</span>MQTT for your own app - RabbahMqtt &amp; RabbahLog</h2>
 
-    <h3><code>MqttLib.enqueue(payload: String)</code></h3>
-    <p>Your app's logs share the exact pipe MDB uses: one bounded queue (default 1000; overflow
-    drops the OLDEST and counts it), one publisher thread, guaranteed ordering, offline
-    buffering. Never blocks, never does I/O on your thread — safe from anywhere, including the
-    UI thread. No-op if MQTT was never initialized.</p>
-    <pre class="code">MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span>)
-MqttLib.enqueue(<span class="s">"telemetry"</span>, <span class="s">"{\"temp\":41}"</span>)   <span class="c">// custom topic suffix: …/&lt;deviceId&gt;/telemetry</span></pre>
+    <p><code class="cmd">RabbahMqtt</code> is the one-stop generic surface - usable with ZERO MDB
+    involvement. Every send is queued (never blocks, buffers offline, silent no-op when MQTT is
+    off); every subscription re-establishes itself on reconnect. Topics are always
+    <code class="cmd">&lt;prefix&gt;/&lt;deviceId&gt;/&lt;suffix&gt;</code> - callers never build one.</p>
 
-    <h3><code>MqttLib.addCommandListener(listener: (String) -&gt; Boolean)</code></h3>
-    <p>Your own remote commands. Listeners run in registration order on the MQTT reader thread;
-    return <code class="cmd">true</code> to consume and stop the chain. mdb-lib's listener is
-    registered during <code class="cmd">MdbLib.init()</code> and consumes only MDB commands;
-    <code class="cmd">ping</code> is answered (<code class="cmd">PONG</code>) by mqtt-lib itself;
-    anything nobody consumes is reported back as <code class="cmd">unknown command</code>.</p>
-    <pre class="code">MqttLib.addCommandListener { cmd -&gt;
+    <h3>Sending</h3>
+    <pre class="code"><span class="c">// logs - ride the compact RABBAH_LOG envelope, render on the dashboard automatically:</span>
+RabbahMqtt.sendLog(<span class="s">"payment gateway responded in 420ms"</span>)
+RabbahMqtt.sendError(<span class="s">"gateway timeout after 3 retries"</span>)     <span class="c">// severity=e, renders red</span>
+
+<span class="c">// JSON or plain text to any custom channel .../&lt;deviceId&gt;/&lt;suffix&gt;:</span>
+RabbahMqtt.sendJson(<span class="s">"telemetry"</span>, JSONObject().put(<span class="s">"battery"</span>, 87))
+RabbahMqtt.sendText(<span class="s">"status"</span>, <span class="s">"READY"</span>)</pre>
+
+    <h3>Receiving</h3>
+    <pre class="code"><span class="c">// the command inbox - plain-text messages on .../commands (first-consume-wins chain):</span>
+<span class="k">val</span> cmdSub = RabbahMqtt.onCommand { cmd -&gt;
     <span class="k">when</span> (cmd) {
-        <span class="s">"rebootKiosk"</span> -&gt; { scheduleReboot(); <span class="k">true</span> }
-        <span class="s">"screenshot"</span>  -&gt; { captureAndUpload(); <span class="k">true</span> }
-        <span class="k">else</span> -&gt; <span class="k">false</span>   <span class="c">// not mine - let other listeners see it</span>
+        <span class="s">"rebootKiosk"</span> -&gt; { scheduleReboot(); <span class="k">true</span> }   <span class="c">// true = consumed, chain stops</span>
+        <span class="k">else</span> -&gt; <span class="k">false</span>                                 <span class="c">// false = let other listeners look</span>
     }
-}</pre>
+}
+RabbahMqtt.removeCommand(cmdSub)
+
+<span class="c">// any custom channel, both formats:</span>
+<span class="k">val</span> s1 = RabbahMqtt.subscribeJson(<span class="s">"inbox"</span>)   { json -&gt; ... }  <span class="c">// non-JSON arrives as {"raw":"..."}</span>
+<span class="k">val</span> s2 = RabbahMqtt.subscribeText(<span class="s">"control"</span>) { text -&gt; ... }
+RabbahMqtt.unsubscribe(s1)</pre>
+    <p>Handlers run on the MQTT reader thread - return quickly, never block, hop to your own
+    coroutine for real work. Return <code class="cmd">false</code> from
+    <code class="cmd">onCommand</code> for anything you don't recognize: mdb-lib's own listener
+    sits on the same chain, <code class="cmd">ping</code> is answered
+    (<code class="cmd">PONG</code>) by mqtt-lib itself, and anything nobody consumes is reported
+    back as <code class="cmd">unknown command</code>.</p>
+
+    <h3>RabbahLog - the compact envelope every log rides</h3>
+    <p>Log lines are not free text on the wire. Each call becomes ONE compact JSON item on
+    <code class="cmd">liveLog</code> (single-letter keys, positional params); mdb-lib emits these
+    automatically for every bus exchange, and <code class="cmd">sendLog</code>/<code class="cmd">sendError</code>
+    use the same path:</p>
+    <pre class="code">RabbahLog.init(<span class="s">"vending-app"</span>, <span class="s">"2.13.5"</span>)   <span class="c">// once - stamps "a" and "v" on every item</span>
+
+<span class="c">// on the wire:</span>
+RABBAH_LOG:{"t":"1787743651002","s":"MDB","m":"13","a":"vending-app","v":"2.13.5",
+            "k":"i","i":"7c1f2a9b","d":1,"p":["13 00 01 5E 00 0C 78","ACK","350","12"]}</pre>
+    <p>t = epoch ms; s+m = codebook entry (schema + message code); a/v = emitter; k = severity
+    i/e/d; i = session id correlating every log of one vend; d = 1 buffered / 2 instant; p =
+    positional params (for MDB events p[0] is always the rx frame, p[1] our reply). The sentence
+    itself is never on the wire: the dashboard fetches this build's dictionary once
+    (<code class="cmd">getCodebook</code> -&gt; <code class="cmd">CODEBOOK_JSON:{...}</code>) and
+    renders through the same <code class="cmd">RabbahLog.format()</code> substitution the
+    on-device screen uses, so the two can never show different wording.
+    <code class="cmd">RabbahLog.makeLogJson(...)</code> builds the envelope without sending.</p>
+
+    <h3>Broker auth (private mosquitto etc.)</h3>
+    <pre class="code">MqttLib.init(MqttConfig(
+    topicPrefix = <span class="s">"cm30-mdb/hamdan-rabbah"</span>, deviceId = myDeviceId,
+    brokerHost = <span class="s">"YOUR-SERVER-IP"</span>, brokerPort = 1883,
+    username = <span class="s">"rabbah"</span>, password = <span class="s">"..."</span>,
+    logTopicSuffix     = <span class="s">"logs"</span>,     <span class="c">// default "liveLog" - the automatic log stream's channel</span>
+    commandTopicSuffix = <span class="s">"cmd"</span>,      <span class="c">// default "commands" - where commands arrive</span>
+    statusTopicSuffix  = <span class="s">"status"</span>    <span class="c">// default null - retained online/offline presence (birth + LWT)</span>
+))</pre>
+    <p>With <code class="cmd">statusTopicSuffix</code> set, a retained <code class="cmd">online</code>
+    is published on every connect, the broker publishes a retained <code class="cmd">offline</code>
+    via Last Will if the device drops, and a graceful <code class="cmd">stop()</code> publishes
+    <code class="cmd">offline</code> itself. The suffix fields exist for the Rabbah backend
+    contract (<code class="cmd">devices/{deviceCode}/logs|cmd|status</code>); the defaults keep the
+    existing dashboard wire format untouched, and the dashboard follows a re-pointed device via
+    <code class="cmd">?logTopic=logs&amp;cmdTopic=cmd</code>.</p>
+    <p>Point the dashboard at the same broker over WebSocket:
+    <code class="cmd">log-viewer.html?broker=ws://HOST:9001&amp;user=...&amp;pass=...</code>
+    (values persist in localStorage; a browser cannot speak plain TCP 1883).</p>
+
+    <h3>The low level, still public</h3>
+    <pre class="code">MqttLib.enqueue(<span class="s">"[app] plain legacy line"</span>)      <span class="c">// raw string to liveLog - still works</span>
+MqttLib.enqueue(<span class="s">"telemetry"</span>, <span class="s">"json-or-text"</span>)    <span class="c">// raw string to a custom suffix</span>
+MqttLib.addCommandListener { cmd -&gt; ... }        <span class="c">// what onCommand wraps</span></pre>
 
     <h3>Diagnostics</h3>
-    <pre class="code">MqttLib.isConnected       <span class="c">// broker link up right now? (enqueue works either way)</span>
-MqttLib.droppedMessages   <span class="c">// how many were dropped to queue overflow - rising = offline too long</span></pre>
+    <pre class="code">MqttLib.isConnected       <span class="c">// broker link up right now? (sends work either way)</span>
+MqttLib.pendingMessages   <span class="c">// waiting in the queue - 0 means fully drained</span>
+MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = offline too long</span></pre>
+    <p><code class="cmd">rabbahlog-sample-v1.1.apk</code> (in the deliverable folder) exercises
+    all of this: on-screen broker settings, log/telemetry/burst buttons, a live
+    queued/sent/dropped line, and an <code class="cmd">inbox</code> subscription to hit with
+    <code class="cmd">mosquitto_pub</code>.</p>
   </section>
 
   <!-- ============================================================ -->
@@ -505,6 +567,8 @@ MqttLib.droppedMessages   <span class="c">// how many were dropped to queue over
         <tr><td><code>setConfig:NAME:hex bytes</code></td><td>set one payload (legacy text form)</td><td>per-name ack + CONFIG_JSON</td></tr>
         <tr><td><code>resetConfig:NAME</code></td><td>reset one payload to default</td><td>ack + CONFIG_JSON</td></tr>
         <tr><td><code>{"setConfig": {...}}</code> · <code>{"resetConfig": [...]}</code> · <code>{"getConfig": true}</code></td><td>JSON form — bulk-capable, validated per name, one bad value never blocks the rest</td><td>per-name acks + CONFIG_JSON</td></tr>
+        <tr><td><code>setPeripheralVisibility:on|off</code></td><td>log-debug: show traffic addressed to OTHER peripherals (coin changer, bill validator) - independent of the unhandled toggle</td><td>ack + SETTINGS_JSON</td></tr>
+        <tr><td><code>getCodebook</code></td><td>answered by mqtt-lib's log layer</td><td>CODEBOOK_JSON snapshot (decode dictionary)</td></tr>
         <tr><td><code>ping</code></td><td>answered by mqtt-lib itself</td><td><code>PONG</code></td></tr>
         <tr><td><em>anything else</em></td><td>offered to the app's own listeners first</td><td><code>[remote] unknown command: …</code> if nobody consumed it</td></tr>
       </tbody>
@@ -517,6 +581,8 @@ MqttLib.droppedMessages   <span class="c">// how many were dropped to queue over
     <div class="table-wrap"><table>
       <thead><tr><th>Prefix</th><th>When</th><th>Payload</th></tr></thead>
       <tbody>
+        <tr><td><code>RABBAH_LOG:</code></td><td>every log event, continuously</td><td>one compact item {t,s,m,a,v,k,i,d,p} - the dashboard decodes it via the codebook</td></tr>
+        <tr><td><code>CODEBOOK_JSON:</code></td><td>reply to getCodebook</td><td>this build's full decode dictionary: schema -&gt; code -&gt; {eventName, template, paramCount}</td></tr>
         <tr><td><code>VMC_STATUS:</code></td><td>every state transition (instant) + every 3 s heartbeat + on start/stop</td><td><code>{"state":"VEND_STATE","recentActivity":true}</code> — recentActivity = bus traffic within 5 s</td></tr>
         <tr><td><code>SETTINGS_JSON:</code></td><td>on boot + after every setting change + on getSettings</td><td>sessionBeginMode, vmcCancelMode, showPollTraffic, showUnhandledCmd, mdbLevel</td></tr>
         <tr><td><code>CONFIG_JSON:</code></td><td>after every config change + on getConfig</td><td>every payload name → current hex string</td></tr>
@@ -528,6 +594,6 @@ MqttLib.droppedMessages   <span class="c">// how many were dropped to queue over
 </main>
 
 <footer>
-  CM30 MDB Slave project — developer manual. mdb-lib 6.4.1 · mqtt-lib 1.1.0 · demo app v2.13.4
-  (build 52). Companion docs: the architecture reference and the interactive vend simulator.
+  CM30 MDB Slave project — developer manual. mdb-lib 6.4.1 · mqtt-lib 1.3.0 · demo app v2.13.6
+  (build 54). Companion docs: the architecture reference and the interactive vend simulator.
 </footer>
