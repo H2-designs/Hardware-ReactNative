@@ -398,8 +398,8 @@
     if (v !== null) { localStorage.setItem('cm30-' + key, v); return v; }
     return localStorage.getItem('cm30-' + key) || def;
   }
-  const BROKER_URL = setting('broker', 'wss://broker.hivemq.com:8884/mqtt');
-  const MQTT_USER = setting('user', '');
+  const BROKER_URL = setting('broker', 'ws://mosquitto:9001'); // rabbah mosquitto websocket listener
+  const MQTT_USER = setting('user', 'rabbah');
   const MQTT_PASS = setting('pass', '');
   // Channel suffixes - override for backend-contract devices: ?logTopic=logs&cmdTopic=cmd
   const LOG_SUFFIX = setting('logTopic', 'liveLog');
