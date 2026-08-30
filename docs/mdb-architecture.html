@@ -498,9 +498,24 @@
       an authenticated broker (e.g. a private mosquitto), and the dashboard points at the same
       broker over WebSocket via URL parameters —
       <code class="cmd">log-viewer.html?broker=ws://HOST:9001&amp;user=…&amp;pass=…</code> —
-      persisted in localStorage. <code class="cmd">rabbahlog-sample-v1.1.apk</code> is the proof
+      persisted in localStorage. <code class="cmd">rabbahlog-sample-v1.2.apk</code> is the proof
       app: on-screen broker settings, log/telemetry/burst buttons, a live queued/sent/dropped
       line, and an <code class="cmd">inbox</code> subscription.
+    </p>
+    <h3>Backend contract: suffixes &amp; presence (mqtt-lib 1.3.0)</h3>
+    <p>
+      The two built-in channels are configurable: <code class="cmd">logTopicSuffix</code>
+      (default <code class="cmd">liveLog</code>) and <code class="cmd">commandTopicSuffix</code>
+      (default <code class="cmd">commands</code>) point the automatic streams at the Rabbah
+      backend contract's <code class="cmd">devices/{deviceCode}/logs</code> and
+      <code class="cmd">…/cmd</code>; the dashboard follows via
+      <code class="cmd">?logTopic=logs&amp;cmdTopic=cmd</code>. Setting
+      <code class="cmd">statusTopicSuffix = "status"</code> adds presence: a RETAINED
+      <code class="cmd">online</code> birth message on every connect, an MQTT Last Will so the
+      broker publishes a retained <code class="cmd">offline</code> on an ungraceful drop, and a
+      graceful <code class="cmd">stop()</code> publishing <code class="cmd">offline</code>
+      itself. The CONNECT wire format (auth + Will) is verified byte-for-byte against a real
+      mosquitto. Defaults keep the pre-1.3.0 behavior exactly.
     </p>
   </section>
 
@@ -779,7 +794,7 @@
 </main>
 
 <footer>
-  CM30 MDB Slave project. Current as of app v2.13.5 (build 53) / mdb-lib 6.4.1 / mqtt-lib 1.2.0: compact RabbahLog codebook envelope, generic RabbahMqtt API, broker auth, two-thread timing
+  CM30 MDB Slave project. Current as of app v2.13.6 (build 54) / mdb-lib 6.4.1 / mqtt-lib 1.3.0: compact RabbahLog codebook envelope, generic RabbahMqtt API, broker auth, backend-contract topic suffixes, retained online/offline presence (birth + LWT), two-thread timing
   engine (bus + offload), JUST RESET consumed once setup starts, order-independent setup retries,
   REVALUE handling, and variable-length BEGIN SESSION payloads. Handshakes and bit layouts
   verified against the MDB/ICP v4.3 specification and against real machine traces.
