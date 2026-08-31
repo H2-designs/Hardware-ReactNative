@@ -4,7 +4,7 @@ Two fully decoupled Android libraries extracted from the proven MDB Slave app:
 
 | Artifact | What it is |
 |---|---|
-| `hardware-lib-7.2.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
+| `hardware-lib-7.3.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
 | `mqtt-lib-2.0.0.aar` | MQTT 3.1.1 transport (queue + publisher thread + auto-reconnect, broker **username/password** auth, retained presence/LWT, **connection-state listener**) **plus the Rabbah compact-log layer**: `RabbahLog`, the unified MDB/INFO codebooks, and `RabbahMqtt` (send/receive logs, text or JSON on any topic — zero MDB involvement). |
 | `CM30-HardwareLibrary-1.0.9.aar` | The CM30 vendor serial driver (hardware-lib needs it at runtime; AARs do not nest). |
 
@@ -54,7 +54,7 @@ fully offline.
 
 > Migration note: the Kotlin package is still `com.rabbah.mdb` and a deprecated
 > `typealias MdbLib = HardwareLib` keeps old code compiling — the only hard change is the
-> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.2.0.aar`) and that MQTT
+> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.3.0.aar`) and that MQTT
 > forwarding now needs the bridge attached.
 
 ## The CMD code schema
@@ -177,12 +177,21 @@ HardwareLib.addControlListener { tag, json -> ... }   / removeControlListener(..
 All registered listeners AND the var slot receive every event; a listener that throws is
 caught and skipped, never fatal to the others.
 
-**If exchangeListener seems to receive nothing, check in this order:** (1) you are on
-hardware-lib < 7.2.0 and the bridge overwrote your assignment — upgrade, or use
-`addExchangeListener`; (2) no real VMC is connected — exchange events fire only for actual
-bus frames (the engine reports `open() failed…` through logListener when the port is dead);
-(3) you assigned the listener after expecting past events — there is no replay, only live
-exchanges from the moment of registration.
+**If exchangeListener seems to receive nothing, check in this order:** (1) stale AAR — the
+demo app prints `hardware-lib 7.3.0` in its boot banner (`HardwareLib.VERSION`); anything
+older means your build still bundles the old library; (2) you are on < 7.2.0 and the bridge
+overwrote your assignment — upgrade, or use `addExchangeListener`; (3) no real VMC is
+connected — exchange events fire only for actual bus frames (the engine reports
+`open() failed…` through logListener when the port is dead); (4) you assigned the listener
+after expecting past events — there is no replay, only live exchanges from registration.
+
+**The built-in self-test (7.3.0):** `HardwareLib.simulateExchange("10 10")` pushes a fake
+RESET through the exact classify → template → listener pipeline — no machine, no open port
+needed; listeners fire synchronously on the calling thread. The demo app runs it once at
+boot, so the screen always shows `[exchange] code=1 RESET_ACK rx=10 10 tx=ACK` within a
+second of launch — if you see that line, the exchange feed provably works on the device.
+Dashboard equivalent: send the command `simulateExchange:10 10` (any hex works, e.g.
+`simulateExchange:13 00 01 F4 00 03` produces a code-11 VEND REQUEST with price 500).
 
 All listeners run on the engine's offload thread, never the bus thread — a slow listener can
 never make a response miss the VMC's reply window, but return promptly anyway. Attach
@@ -318,7 +327,7 @@ status line, and an `inbox` subscription you can hit with `mosquitto_pub`.
 Preferred: consume the modules directly (`implementation project(':hardware-lib')`,
 `project(':mqtt-lib')`) — see the demo `app/`.
 
-If consuming raw AARs instead: add `hardware-lib-7.2.0.aar`, `mqtt-lib-2.0.0.aar`, **and**
+If consuming raw AARs instead: add `hardware-lib-7.3.0.aar`, `mqtt-lib-2.0.0.aar`, **and**
 `CM30-HardwareLibrary-1.0.9.aar` (hardware-lib needs it at runtime; AARs do not nest). If you
 skip MQTT entirely, `hardware-lib` + the CM30 AAR alone are enough.
 
