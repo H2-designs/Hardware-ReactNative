@@ -31,6 +31,8 @@ import com.rabbah.mqtt.RabbahLog
  *   MdbStateChanged { state: string }  // edge-triggered: INACTIVE/DISABLED/ENABLED/VEND_STATE
  *   MdbExchange     { code: number, name, rxHex, txName, message, sessionId? } // CMD-coded
  *   MdbRemoteCommand{ command: string } // dashboard commands the MDB engine did not consume
+ *   MqttConnectionChanged { connected: boolean } // broker session up/down, edge-triggered,
+ *                                                // plus once immediately on initMqtt()
  */
 class MdbRnModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
@@ -48,13 +50,21 @@ class MdbRnModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun initMqtt(topicPrefix: String, deviceId: String) {
         MqttLib.init(MqttConfig(topicPrefix = topicPrefix, deviceId = deviceId))
+        // Connection visibility for JS: fires once immediately with the current state, then on
+        // every change (edge-triggered) - no polling needed on the JS side.
+        MqttLib.addConnectionListener { connected ->
+            val map = Arguments.createMap()
+            map.putBoolean("connected", connected)
+            emit("MqttConnectionChanged", map)
+        }
     }
 
-    @ReactMethod fun startMqtt() = MqttLib.start()
-    @ReactMethod fun stopMqtt() = MqttLib.stop()
+    @ReactMethod fun startMqtt(promise: Promise) = promise.resolve(MqttLib.start())
+    @ReactMethod fun stopMqtt(promise: Promise) = promise.resolve(MqttLib.stop())
 
-    /** The one way out for the app's own log lines - same queue MDB uses. */
-    @ReactMethod fun mqttEnqueue(line: String) = MqttLib.enqueue(line)
+    /** The one way out for the app's own log lines - same queue MDB uses.
+     * Resolves true when queued; false when MQTT was never initialized. */
+    @ReactMethod fun mqttEnqueue(line: String, promise: Promise) = promise.resolve(MqttLib.enqueue(line))
 
     @ReactMethod fun isMqttConnected(promise: Promise) = promise.resolve(MqttLib.isConnected)
 
@@ -139,12 +149,12 @@ class MdbRnModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
-    @ReactMethod fun startMdb() = MdbLib.start()
-    @ReactMethod fun stopMdb() = MdbLib.stop()
+    @ReactMethod fun startMdb(promise: Promise) = promise.resolve(MdbLib.start())
+    @ReactMethod fun stopMdb(promise: Promise) = promise.resolve(MdbLib.stop())
 
     // ------------------------------------ vend actions ------------------------------------
 
-    @ReactMethod fun beginSession() = MdbLib.beginSession()
+    @ReactMethod fun beginSession(promise: Promise) = promise.resolve(MdbLib.beginSession())
     @ReactMethod fun approveVend(promise: Promise) = promise.resolve(MdbLib.approveVend())
     @ReactMethod fun cancelVend(promise: Promise) = promise.resolve(MdbLib.cancelVend())
 
@@ -172,12 +182,12 @@ class MdbRnModule(private val reactContext: ReactApplicationContext) :
         )
     }
 
-    @ReactMethod fun setAutoSession(enabled: Boolean) = MdbLib.setAutoSession(enabled)
+    @ReactMethod fun setAutoSession(enabled: Boolean, promise: Promise) = promise.resolve(MdbLib.setAutoSession(enabled))
     @ReactMethod fun isAutoSession(promise: Promise) = promise.resolve(MdbLib.isAutoSession)
-    @ReactMethod fun setMdbLevel(level: Int) = MdbLib.setMdbLevel(level)
-    @ReactMethod fun setMqttLogging(enabled: Boolean) = MdbLib.setMqttLogging(enabled)
-    @ReactMethod fun setPollVisibility(show: Boolean) = MdbLib.setPollVisibility(show)
-    @ReactMethod fun setUnhandledVisibility(show: Boolean) = MdbLib.setUnhandledVisibility(show)
+    @ReactMethod fun setMdbLevel(level: Int, promise: Promise) = promise.resolve(MdbLib.setMdbLevel(level))
+    @ReactMethod fun setMqttLogging(enabled: Boolean, promise: Promise) = promise.resolve(MdbLib.setMqttLogging(enabled))
+    @ReactMethod fun setPollVisibility(show: Boolean, promise: Promise) = promise.resolve(MdbLib.setPollVisibility(show))
+    @ReactMethod fun setUnhandledVisibility(show: Boolean, promise: Promise) = promise.resolve(MdbLib.setUnhandledVisibility(show))
     @ReactMethod fun getSettingsJson(promise: Promise) = promise.resolve(MdbLib.currentSettingsJson())
 
     // ------------------------------------ hex payload configs ------------------------------------

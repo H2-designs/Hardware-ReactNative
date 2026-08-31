@@ -234,8 +234,8 @@
 
   <!-- ============================================================ -->
   <section id="split700">
-    <h2><span class="eyebrow">NEW &mdash; the 7.0.0 split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.0.0</code></strong> &mdash; renamed, and with the
+    <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
+    <p><strong>mdb-lib is now <code>hardware-lib-7.1.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -528,7 +528,7 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
   <section id="mdbflow">
     <h2><span class="eyebrow">05 — the full loop</span>MDB data flow, end to end</h2>
     <figure>
-      <svg viewBox="0 0 940 300" role="img" aria-label="End-to-end MDB flow: the VMC talks to the CM30 transport inside hardware-lib; the HardwareLib state machine answers on the bus, reading payloads from MdbConfigStore, and pushes every exchange line and heartbeat into mqtt-lib's outbound queue. The same lines are optionally delivered to the app's local logListener, and business vend events go to the vendListener. The queue's publisher thread ships everything to the dashboard.">
+      <svg viewBox="0 0 940 300" role="img" aria-label="End-to-end MDB flow: the VMC talks to the CM30 transport inside hardware-lib; the HardwareLib state machine answers on the bus, reading payloads from MdbConfigStore, and pushes every exchange line and status events into mqtt-lib's outbound queue (event-driven since 7.1.0: transitions and activity flips, no periodic heartbeat). The same lines are optionally delivered to the app's local logListener, and business vend events go to the vendListener. The queue's publisher thread ships everything to the dashboard.">
         <defs>
           <marker id="earr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -737,7 +737,7 @@ HardwareLib.vendListener = <span class="k">object</span> : HardwareLib.VendListe
   <section id="api">
     <h2><span class="eyebrow">07 — the contract</span>Public API, as shipped</h2>
 
-    <h3>mqtt-lib (1.3.1)</h3>
+    <h3>mqtt-lib (2.0.0)</h3>
     <pre class="code"><span class="k">class</span> MqttConfig(
     <span class="k">val</span> topicPrefix: String,              <span class="c">// e.g. "cm30-mdb/hamdan-rabbah"</span>
     <span class="k">val</span> deviceId: String,                 <span class="c">// shown on-screen; separates machines</span>
@@ -861,8 +861,8 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
 
     <div class="callout">
       <p>
-        <strong>Artifacts:</strong> <code class="cmd">mqtt-lib-1.3.1.aar</code>,
-        <code class="cmd">hardware-lib-7.0.0.aar</code> (plus the bundled CM30 vendor .aar as its
+        <strong>Artifacts:</strong> <code class="cmd">mqtt-lib-2.0.0.aar</code>,
+        <code class="cmd">hardware-lib-7.1.0.aar</code> (plus the bundled CM30 vendor .aar as its
         runtime dependency), the demo APK as the reference integration, and
         <code class="cmd">LIBRARY_README.md</code> for the integrating developer. Wire protocol
         unchanged throughout — the existing <code class="cmd">log-viewer.html</code> dashboard
@@ -873,6 +873,6 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
 </main>
 
 <footer>
-  CM30 MDB Slave project — library architecture, as built. Current as of hardware-lib 7.0.0 /
-  mqtt-lib 1.3.1 (demo app v2.13.7, build 55).
+  CM30 MDB Slave project — library architecture, as built. Current as of hardware-lib 7.1.0 /
+  mqtt-lib 2.0.0 (demo app v2.13.7, build 55).
 </footer>

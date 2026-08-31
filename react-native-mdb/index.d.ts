@@ -34,16 +34,16 @@ export const ConfigName: {
 
 declare const Mdb: {
   initMqtt(topicPrefix: string, deviceId: string): void;
-  startMqtt(): void;
-  stopMqtt(): void;
-  mqttEnqueue(line: string): void;
+  startMqtt(): Promise<boolean>;
+  stopMqtt(): Promise<boolean>;
+  mqttEnqueue(line: string): Promise<boolean>;
   isMqttConnected(): Promise<boolean>;
 
   initMdb(): void;
-  startMdb(): void;
-  stopMdb(): void;
+  startMdb(): Promise<boolean>;
+  stopMdb(): Promise<boolean>;
 
-  beginSession(): void;
+  beginSession(): Promise<boolean>;
   approveVend(): Promise<boolean>;
   cancelVend(): Promise<boolean>;
   cancelVendWith(mode: CancelMode): Promise<boolean>;
@@ -52,12 +52,12 @@ declare const Mdb: {
   isSessionActive(): Promise<boolean>;
 
   setCancelMode(mode: CancelMode): void;
-  setAutoSession(enabled: boolean): void;
+  setAutoSession(enabled: boolean): Promise<boolean>;
   isAutoSession(): Promise<boolean>;
-  setMdbLevel(level: 1 | 2 | 3): void;
-  setMqttLogging(enabled: boolean): void;
-  setPollVisibility(show: boolean): void;
-  setUnhandledVisibility(show: boolean): void;
+  setMdbLevel(level: 1 | 2 | 3): Promise<boolean>;
+  setMqttLogging(enabled: boolean): Promise<boolean>;
+  setPollVisibility(show: boolean): Promise<boolean>;
+  setUnhandledVisibility(show: boolean): Promise<boolean>;
   getSettingsJson(): Promise<string>;
 
   getConfigHex(name: string): Promise<string>;

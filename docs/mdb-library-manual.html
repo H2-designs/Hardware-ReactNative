@@ -128,14 +128,14 @@
     The complete developer manual for <code class="cmd">hardware-lib</code> and
     <code class="cmd">mqtt-lib</code>: every function with a working example, every dashboard
     command, and what actually happens inside when you call each one. Current as of
-    hardware-lib&nbsp;7.0.0 / mqtt-lib&nbsp;1.3.1.
+    hardware-lib&nbsp;7.1.0 / mqtt-lib&nbsp;2.0.0.
   </p>
 
 
   <!-- ============================================================ -->
   <section id="split700">
-    <h2><span class="eyebrow">NEW &mdash; the 7.0.0 split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.0.0</code></strong> &mdash; renamed, and with the
+    <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
+    <p><strong>mdb-lib is now <code>hardware-lib-7.1.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -161,6 +161,18 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
     plus the existing <code>vendListener</code> / <code>logListener</code> / <code>statusListener</code>.
     <strong>New input:</strong> <code>HardwareLib.handleCommand(text): Boolean</code> &mdash; feed it
     whatever any transport receives; it consumes what it recognizes.</p>
+    <p><strong>New in 7.1.0 / mqtt-lib 2.0.0:</strong>
+    (1) <em>MQTT connection status, event-driven</em> &mdash;
+    <code>RabbahMqtt.onConnection { connected -&gt; ... }</code> (or
+    <code>MqttLib.addConnectionListener</code>) fires once immediately with the current state and
+    then exactly once per change; <code>RabbahMqtt.isConnected</code> reads it on demand. The demo
+    app logs <code>[mqtt] CONNECTED to ...</code> / <code>[mqtt] DISCONNECTED - reconnecting...</code>.
+    (2) <em>VMC_STATUS is now fully event-driven</em> &mdash; it publishes on state transitions,
+    on recentActivity flips and on start/stop; the periodic 3-second heartbeat is gone.
+    (3) <em>Every call answers true/false</em> &mdash; no public function returns nothing:
+    lifecycle, session/vend, every setting and every mqtt-lib call returns <code>Boolean</code>
+    (true = done/queued, false = rejected or not applicable). Only <code>setConfigHex</code> /
+    <code>setReplyHex</code> differ: null on success, else the error sentence.</p>
     <p><strong>The CMD code schema.</strong> Every exchange carries one stable integer code
     (<code>MdbCmd</code>, append-only). Edit a reply by number with
     <code>setReplyHex(code, hex)</code> / read it with <code>getReplyHex(code)</code>; the last
@@ -205,8 +217,8 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
     <h2><span class="eyebrow">01</span>Getting started</h2>
     <p>Add the AARs (or the Gradle modules) and initialize once at app startup:</p>
     <pre class="code"><span class="c">// build.gradle (raw AARs; skip if using the Gradle modules directly)</span>
-implementation files(<span class="s">'libs/mqtt-lib-1.3.1.aar'</span>)
-implementation files(<span class="s">'libs/hardware-lib-7.0.0.aar'</span>)
+implementation files(<span class="s">'libs/mqtt-lib-2.0.0.aar'</span>)
+implementation files(<span class="s">'libs/hardware-lib-7.1.0.aar'</span>)
 implementation files(<span class="s">'libs/CM30-HardwareLibrary-1.0.9.aar'</span>)  <span class="c">// hardware-lib's hardware runtime</span></pre>
 
     <pre class="code"><span class="c">// In your Application class or first Activity - the whole startup:</span>
@@ -406,7 +418,7 @@ HardwareLib.isSessionActive   <span class="c">// true between BEGIN SESSION and 
 
 HardwareLib.statusListener = { json -&gt;
     <span class="c">// {"state":"VEND_STATE","recentActivity":true}</span>
-    <span class="c">// fires INSTANTLY on every state transition + every 3 s as a heartbeat</span>
+    <span class="c">// fires INSTANTLY on every state transition + whenever bus activity appears or disappears (event-driven, the periodic heartbeat is gone)</span>
     runOnUiThread { stateBadge.text = JSONObject(json).getString(<span class="s">"state"</span>) }
 }
 
@@ -453,7 +465,7 @@ HardwareLib.logListener = { line, showOnScreen -&gt;
     <p>Master on/off for publishing the engine's <strong>log lines</strong> over MQTT. Persisted.
     While OFF: the local <code class="cmd">logListener</code> still gets every line (your
     on-device log keeps working), and the <strong>control plane keeps publishing</strong> —
-    VMC_STATUS heartbeat, SETTINGS_JSON, CONFIG_JSON, PONG — so the dashboard still sees the
+    VMC_STATUS status events, SETTINGS_JSON, CONFIG_JSON, PONG — so the dashboard still sees the
     device state and can still send commands, including <code class="cmd">setMqttLogging:on</code>
     to turn the stream back on. Only the log traffic goes quiet (useful to cut broker traffic in
     production, or when many devices share one topic prefix).
@@ -652,7 +664,7 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
       <tbody>
         <tr><td><code>RABBAH_LOG:</code></td><td>every log event, continuously</td><td>one compact item {t,s,m,a,v,k,i,d,p} - the dashboard decodes it via the codebook</td></tr>
         <tr><td><code>CODEBOOK_JSON:</code></td><td>reply to getCodebook</td><td>this build's full decode dictionary: schema -&gt; code -&gt; {eventName, template, paramCount}</td></tr>
-        <tr><td><code>VMC_STATUS:</code></td><td>every state transition (instant) + every 3 s heartbeat + on start/stop</td><td><code>{"state":"VEND_STATE","recentActivity":true}</code> — recentActivity = bus traffic within 5 s</td></tr>
+        <tr><td><code>VMC_STATUS:</code></td><td>every state transition (instant) + activity flips + on start/stop (event-driven, no heartbeat)</td><td><code>{"state":"VEND_STATE","recentActivity":true}</code> — recentActivity = bus traffic within 5 s</td></tr>
         <tr><td><code>SETTINGS_JSON:</code></td><td>on boot + after every setting change + on getSettings</td><td>sessionBeginMode, vmcCancelMode, showPollTraffic, showUnhandledCmd, mdbLevel</td></tr>
         <tr><td><code>CONFIG_JSON:</code></td><td>after every config change + on getConfig</td><td>every payload name → current hex string</td></tr>
         <tr><td><code>PONG</code></td><td>reply to ping</td><td>proves the device end-to-end alive, not just the broker</td></tr>
@@ -663,6 +675,6 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
 </main>
 
 <footer>
-  CM30 MDB Slave project — developer manual. hardware-lib 7.0.0 · mqtt-lib 1.3.1 · demo app v2.13.9
+  CM30 MDB Slave project — developer manual. hardware-lib 7.1.0 · mqtt-lib 2.0.0 · demo app v2.13.10
   (build 54). Companion docs: the architecture reference and the interactive vend simulator.
 </footer>

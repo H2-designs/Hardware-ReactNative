@@ -4,8 +4,8 @@ Two fully decoupled Android libraries extracted from the proven MDB Slave app:
 
 | Artifact | What it is |
 |---|---|
-| `hardware-lib-7.0.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
-| `mqtt-lib-1.3.1.aar` | MQTT 3.1.1 transport (queue + publisher thread + auto-reconnect, broker **username/password** auth, retained presence/LWT) **plus the Rabbah compact-log layer**: `RabbahLog`, the unified MDB/INFO codebooks, and `RabbahMqtt` (send/receive logs, text or JSON on any topic — zero MDB involvement). |
+| `hardware-lib-7.1.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
+| `mqtt-lib-2.0.0.aar` | MQTT 3.1.1 transport (queue + publisher thread + auto-reconnect, broker **username/password** auth, retained presence/LWT, **connection-state listener**) **plus the Rabbah compact-log layer**: `RabbahLog`, the unified MDB/INFO codebooks, and `RabbahMqtt` (send/receive logs, text or JSON on any topic — zero MDB involvement). |
 | `CM30-HardwareLibrary-1.0.9.aar` | The CM30 vendor serial driver (hardware-lib needs it at runtime; AARs do not nest). |
 
 ## Architecture — who talks to whom
@@ -50,7 +50,7 @@ fully offline.
 
 > Migration note: the Kotlin package is still `com.rabbah.mdb` and a deprecated
 > `typealias MdbLib = HardwareLib` keeps old code compiling — the only hard change is the
-> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.0.0.aar`) and that MQTT
+> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.1.0.aar`) and that MQTT
 > forwarding now needs the bridge attached.
 
 ## The CMD code schema
@@ -121,13 +121,22 @@ p[0]=rx, p[1]=tx, extras like price/item/level), `message` (the human sentence),
 | `stateListener` | `"INACTIVE_STATE" \| "DISABLED_STATE" \| "ENABLED_STATE" \| "VEND_STATE"` | On every state TRANSITION only (edge-triggered — never on heartbeats) |
 | `exchangeListener` | `MdbExchangeEvent` | Once per handled bus exchange, CMD-coded |
 | `logListener` | `(line, showOnScreen)` | Every human-readable line |
-| `statusListener` | `{"state": ..., "recentActivity": ...}` JSON | Every transition + 3 s heartbeat |
+| `statusListener` | `{"state": ..., "recentActivity": ...}` JSON | **Event-driven, never polled**: every transition, every recentActivity flip (bus traffic appeared / went quiet past 5 s), and start/stop |
 | `controlListener` | `(tag, payload)` — tags `LOG`, `SETTINGS_JSON`, `CONFIG_JSON`, `VMC_STATUS` | Whenever the engine reports/announces |
 | `vendListener` | typed vend callbacks | See "Taking payments" below |
 
 All listeners run on the engine's offload thread, never the bus thread — a slow listener can
 never make a response miss the VMC's reply window, but return promptly anyway. Attach
 listeners BEFORE `HardwareLib.init(context)` — init publishes the first settings snapshot.
+
+**Every call answers true/false.** No public function returns nothing: lifecycle
+(`init`/`start`/`stop`), session/vend (`beginSession`/`approveVend`/`cancelVend`), every
+setting (`setAutoSession`, `setMdbLevel`, `setMqttLogging`, the visibility toggles,
+`setCancelMode`) and every mqtt-lib call (`init`/`start`/`stop`, `enqueue`,
+subscribe/unsubscribe, listener add/remove, `RabbahLog.log`/`raw`) returns `Boolean` —
+true = done/queued, false = rejected or not applicable (e.g. `start()` with no MDB port,
+`enqueue` before `MqttLib.init`, `setMdbLevel(9)`). Only value-returning calls differ:
+`setConfigHex`/`setReplyHex` return `null` on success or the error sentence.
 
 `HardwareLib.handleCommand(text): Boolean` is the transport-agnostic remote-control entry:
 feed it whatever text arrives from MQTT/HTTP/BLE/adb; it consumes what it recognizes
@@ -202,6 +211,30 @@ RabbahMqtt.unsubscribe(s1)
 Handlers run on the MQTT reader thread — return quickly, never block, hop to your own thread
 for real work. Topics are always `<prefix>/<deviceId>/<suffix>`; callers never build one.
 
+## MQTT connection status — event-driven, no polling
+
+Any Android code can SEE whether the broker session is up, the moment it changes:
+
+```kotlin
+// The listener: called once immediately with the CURRENT state (your status view is right
+// from the first frame), then exactly once per change - connected=true the moment the
+// session is fully up (CONNACK + subscriptions), false the moment it drops.
+val sub = RabbahMqtt.onConnection { connected ->
+    runOnUiThread { statusView.text = if (connected) "MQTT: CONNECTED" else "MQTT: OFFLINE" }
+}
+RabbahMqtt.removeConnection(sub)          // stop receiving
+
+// The same thing at transport level (what the demo app uses for its log line):
+MqttLib.addConnectionListener { connected -> ... }
+
+// On-demand check, no listener:
+RabbahMqtt.isConnected                     // true while the session is up right now
+```
+
+Reconnecting stays automatic either way — this is purely visibility. Sends still work while
+offline (they queue and drain on reconnect). The demo app shows it as a log line:
+`[mqtt] CONNECTED to uat-api.rabbah.sa` / `[mqtt] DISCONNECTED - reconnecting...`.
+
 ## Broker auth (private mosquitto etc.)
 
 ```kotlin
@@ -226,7 +259,7 @@ status line, and an `inbox` subscription you can hit with `mosquitto_pub`.
 Preferred: consume the modules directly (`implementation project(':hardware-lib')`,
 `project(':mqtt-lib')`) — see the demo `app/`.
 
-If consuming raw AARs instead: add `hardware-lib-7.0.0.aar`, `mqtt-lib-1.3.1.aar`, **and**
+If consuming raw AARs instead: add `hardware-lib-7.1.0.aar`, `mqtt-lib-2.0.0.aar`, **and**
 `CM30-HardwareLibrary-1.0.9.aar` (hardware-lib needs it at runtime; AARs do not nest). If you
 skip MQTT entirely, `hardware-lib` + the CM30 AAR alone are enough.
 
@@ -344,7 +377,8 @@ Unchanged by the split — the bridge reproduces it byte-identically:
   suffixes configurable (`logTopicSuffix`/`commandTopicSuffix`/`statusTopicSuffix` for the
   `devices/{deviceCode}/logs|cmd|status` backend contract).
 - Tagged messages out: `RABBAH_LOG:{…}` (compact log items), `CODEBOOK_JSON:{…}` (reply to
-  `getCodebook`), `VMC_STATUS:{...}` (3 s heartbeat + instant on state change),
+  `getCodebook`), `VMC_STATUS:{...}` (event-driven: instant on state change, on
+  recentActivity flips, and on start/stop — no periodic heartbeat),
   `SETTINGS_JSON:{...}`, `CONFIG_JSON:{...}`, `PONG`; anything untagged is a plain log line.
 - Queue: bounded (default 1000), drop-oldest on overflow (`MqttLib.droppedMessages` counts).
 - The stack runs on the Rabbah mosquitto (mqtt://mosquitto:1883) with username/password auth;
