@@ -246,7 +246,7 @@
     </ul>
     <p>
       Inside the app, the core rule is: <strong>the MDB protocol engine and the MQTT client never
-      reference each other.</strong> <code class="cmd">MdbLib</code> (mdb-lib) has no network
+      reference each other.</strong> <code class="cmd">HardwareLib</code> (hardware-lib) has no network
       imports beyond the queue handoff; <code class="cmd">MqttLib</code> (mqtt-lib) has no MDB knowledge. The single place they
       meet is <code class="cmd">MdbSlaveActivity</code>, which implements the engine's
       <code class="cmd">Listener</code> interface on one side and owns the MQTT callbacks on the
@@ -258,15 +258,15 @@
     <h2><span class="eyebrow">02 — who owns what</span>Components</h2>
     <div class="card-grid">
       <div class="card">
-        <h4>MdbLib.kt  (mdb-lib)</h4>
+        <h4>HardwareLib.kt  (hardware-lib)</h4>
         <p>The full slave state machine: 4 states, per-level setup handshakes, the vend cycle, global RESET, REVALUE. Two threads: the urgent-priority bus loop (receive - dispatch - send, nothing else) and the offload thread that runs all logging, listeners and vend callbacks.</p>
       </div>
       <div class="card">
         <h4>MdbSlaveActivity.kt  (app)</h4>
-        <p>The thin reference integration. Wires MqttLib + MdbLib at startup and mirrors logListener/statusListener to the screen. Contains zero protocol logic; any Android app would look like this.</p>
+        <p>The thin reference integration. Wires MqttLib + HardwareLib at startup and mirrors logListener/statusListener to the screen. Contains zero protocol logic; any Android app would look like this.</p>
       </div>
       <div class="card">
-        <h4>MdbSlaveWrapper.kt  (mdb-lib)</h4>
+        <h4>MdbSlaveWrapper.kt  (hardware-lib)</h4>
         <p>The CM30 hardware transport: reads frames from the vendor runtime, computes the MDB checksum (8-bit sum, appended as last byte), sends the response BEFORE any logging, and fetches every payload fresh from MdbConfigStore on each send.</p>
       </div>
       <div class="card">
@@ -274,11 +274,11 @@
         <p>Hand-rolled MQTT 3.1.1 client (CONNECT with optional username/password, PUBLISH QoS 0, SUBSCRIBE, PINGREQ - no third-party library). One bounded queue, one publisher thread as the only socket writer, auto-reconnect, command listener chain. Knows nothing about MDB.</p>
       </div>
       <div class="card">
-        <h4>MdbConfigStore.kt  (mdb-lib)</h4>
+        <h4>MdbConfigStore.kt  (hardware-lib)</h4>
         <p>The wire payloads themselves - every response’s raw bytes, persisted in SharedPreferences, editable live from Android or the dashboard. Length locked per name, except the two Begin Session payloads (1–35 bytes freely editable).</p>
       </div>
       <div class="card">
-        <h4>MdbSettings.kt  (mdb-lib)</h4>
+        <h4>MdbSettings.kt  (hardware-lib)</h4>
         <p>Persisted behavior flags: session-begin mode (auto/manual), VMC-cancel response mode, MDB level (1/2/3), MQTT log muting, and the three visibility switches (POLL, unhandled, other-peripheral). Loaded once at startup into the engine.</p>
       </div>
       <div class="card">
@@ -291,6 +291,75 @@
         toggles, and the per-byte Config editor with level-aware rows.</p>
       </div>
     </div>
+  </section>
+
+
+  <!-- ============================================================ -->
+  <section id="split700">
+    <h2><span class="eyebrow">NEW &mdash; the 7.0.0 split</span>hardware-lib: the MDB engine, MQTT-free</h2>
+    <p><strong>mdb-lib is now <code>hardware-lib-7.0.0</code></strong> &mdash; renamed, and with the
+    entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
+    produces exits through listeners, everything it accepts enters through plain functions.
+    The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
+    <code>typealias MdbLib = HardwareLib</code> keeps existing code compiling.</p>
+    <p>The MQTT wiring that used to be automatic now lives in a ~30-line app-side bridge
+    (<code>MdbMqttBridge.kt</code>, shipped in <code>samples/</code>) that reproduces the old wire
+    format <em>byte-identically</em> &mdash; the dashboard needs zero changes:</p>
+    <pre class="code"><span class="c">// the whole bridge - attach BEFORE HardwareLib.init():</span>
+MqttLib.addCommandListener { HardwareLib.handleCommand(it) }        <span class="c">// commands in</span>
+HardwareLib.controlListener = { tag, payload -&gt;                     <span class="c">// control plane out</span>
+    <span class="k">if</span> (tag == <span class="s">"LOG"</span>) MqttLib.enqueue(payload) <span class="k">else</span> MqttLib.enqueue(<span class="s">"$tag:$payload"</span>)
+}
+HardwareLib.exchangeListener = { e -&gt;                               <span class="c">// exchanges out</span>
+    <span class="k">if</span> (e.publishRemote) {
+        RabbahLog.sessionId = e.sessionId
+        RabbahLog.log(MdbLogEvent.valueOf(e.logEventName), e.params)
+    }
+}</pre>
+    <p><strong>New listener surface:</strong>
+    <code>stateListener</code> (plain state name, edge-triggered on every transition),
+    <code>exchangeListener</code> (one structured <code>MdbExchangeEvent</code> per exchange),
+    <code>controlListener</code> (tag + JSON for SETTINGS_JSON / CONFIG_JSON / VMC_STATUS / LOG),
+    plus the existing <code>vendListener</code> / <code>logListener</code> / <code>statusListener</code>.
+    <strong>New input:</strong> <code>HardwareLib.handleCommand(text): Boolean</code> &mdash; feed it
+    whatever any transport receives; it consumes what it recognizes.</p>
+    <p><strong>The CMD code schema.</strong> Every exchange carries one stable integer code
+    (<code>MdbCmd</code>, append-only). Edit a reply by number with
+    <code>setReplyHex(code, hex)</code> / read it with <code>getReplyHex(code)</code>; the last
+    frame the VMC sent per code is saved &mdash; <code>lastReceivedHex(code)</code> /
+    <code>lastReceivedJson()</code>:</p>
+    
+<table>
+  <thead><tr><th>Code</th><th>VMC sends</th><th>We reply</th><th>Reply hex editable?</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>RESET (10)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>2</td><td>POLL (12)</td><td>JUST RESET</td><td><code>JUST_RESET</code></td></tr>
+    <tr><td>3</td><td>SETUP CONFIG (11 00)</td><td>READER CONFIG DATA</td><td><code>READER_CONFIG_DATA</code></td></tr>
+    <tr><td>4</td><td>EXPANSION REQUEST ID (17 00)</td><td>PERIPHERAL ID</td><td><code>READER_CONFIG_INFO</code> / <code>_L3</code> &mdash; VMC's ID payload captured</td></tr>
+    <tr><td>5</td><td>SETUP MAX/MIN PRICES (11 01)</td><td>ACK</td><td>fixed (rx captured)</td></tr>
+    <tr><td>6</td><td>EXPANSION ENABLE OPTIONS (17 04)</td><td>ACK</td><td>fixed (rx captured)</td></tr>
+    <tr><td>7</td><td>READER ENABLE (14 01)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>8</td><td>READER DISABLE (14 00)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>9</td><td>READER CANCEL (14 02)</td><td>CANCELLED</td><td><code>CAN</code></td></tr>
+    <tr><td>10</td><td>POLL (12)</td><td>BEGIN SESSION</td><td><code>SESSION_BEGIN</code> / <code>_L2</code> (1&ndash;35 bytes)</td></tr>
+    <tr><td>11</td><td>VEND REQUEST (13 00)</td><td>ACK</td><td>fixed (price + item captured)</td></tr>
+    <tr><td>12</td><td>POLL (12)</td><td>VEND APPROVED</td><td><code>VEND_APPROVED</code></td></tr>
+    <tr><td>13</td><td>POLL (12)</td><td>VEND DENIED</td><td><code>VEND_DENIED</code></td></tr>
+    <tr><td>14</td><td>VEND SUCCESS (13 02)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>15</td><td>VEND FAILURE (13 03)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>16</td><td>VEND SESSION COMPLETE (13 04)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>17</td><td>POLL (12)</td><td>END SESSION</td><td><code>END_SESSION</code></td></tr>
+    <tr><td>18</td><td>VEND CANCEL (13 01)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>19</td><td>POLL (12)</td><td>SESSION CANCEL REQUEST</td><td><code>SESSION_CANCEL</code></td></tr>
+    <tr><td>20</td><td>REVALUE REQUEST (15 00)</td><td>REVALUE DENIED</td><td><code>REVALUE_DENIED</code></td></tr>
+    <tr><td>21</td><td>REVALUE LIMIT REQUEST (15 01)</td><td>REVALUE LIMIT AMOUNT</td><td><code>REVALUE_LIMIT</code></td></tr>
+    <tr><td>22</td><td>CASH SALE (13 05)</td><td>ACK</td><td>fixed (price + item captured)</td></tr>
+    <tr><td>23</td><td>POLL (12), idle</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>24</td><td>EXPANSION, other subcommand</td><td>(varies)</td><td>&mdash;</td></tr>
+    <tr><td>90</td><td>other peripheral (outside 10&ndash;17)</td><td>(ignored)</td><td>&mdash;</td></tr>
+    <tr><td>99</td><td>unrecognized in current state</td><td>(none)</td><td>&mdash;</td></tr>
+  </tbody>
+</table>
   </section>
 
   <section id="remote">
@@ -353,7 +422,7 @@
     </p>
 
     <figure>
-      <svg viewBox="0 0 980 400" role="img" aria-label="Data flows from the VMC hardware bus through MdbSlaveWrapper into MdbLib, which pushes every exchange onto the offload queue; from there lines fan out to RabbahLog (codebook items) and to MqttLib, which relays to the PC control page over the broker. Remote commands from the PC page flow the reverse path: MqttLib receives them and the registered command listeners translate them into engine calls.">
+      <svg viewBox="0 0 980 400" role="img" aria-label="Data flows from the VMC hardware bus through MdbSlaveWrapper into HardwareLib, which pushes every exchange onto the offload queue; from there lines fan out to RabbahLog (codebook items) and to MqttLib, which relays to the PC control page over the broker. Remote commands from the PC page flow the reverse path: MqttLib receives them and the registered command listeners translate them into engine calls.">
         <defs>
           <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -374,7 +443,7 @@
         <text x="229" y="193" text-anchor="middle" font-size="9.5" fill="var(--muted)">bytes + checksum</text>
 
         <rect x="334" y="140" width="150" height="84" rx="8" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.4"/>
-        <text x="409" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent)">MdbLib (engine)</text>
+        <text x="409" y="172" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent)">HardwareLib (engine)</text>
         <text x="409" y="188" text-anchor="middle" font-size="9.5" fill="var(--muted)">state machine</text>
         <text x="409" y="201" text-anchor="middle" font-size="9.5" fill="var(--muted)">no network knowledge</text>
 
@@ -458,7 +527,7 @@
   <section id="logs">
     <h2><span class="eyebrow">05 — one envelope for every log</span>The compact log pipeline</h2>
     <p>
-      Log lines are no longer free text. Every event — each bus exchange from mdb-lib
+      Log lines are no longer free text. Every event — each bus exchange from hardware-lib
       automatically, and anything the host app reports — becomes ONE compact JSON item through
       <code class="cmd">RabbahLog</code> (in mqtt-lib), which rides the same bounded queue as
       everything else:
@@ -502,7 +571,7 @@
       app: on-screen broker settings, log/telemetry/burst buttons, a live queued/sent/dropped
       line, and an <code class="cmd">inbox</code> subscription.
     </p>
-    <h3>Backend contract: suffixes &amp; presence (mqtt-lib 1.3.0)</h3>
+    <h3>Backend contract: suffixes &amp; presence (mqtt-lib 1.3.1)</h3>
     <p>
       The two built-in channels are configurable: <code class="cmd">logTopicSuffix</code>
       (default <code class="cmd">liveLog</code>) and <code class="cmd">commandTopicSuffix</code>
@@ -779,14 +848,14 @@
     <div class="table-wrap"><table>
       <thead><tr><th>File</th><th>Responsibility</th></tr></thead>
       <tbody>
-        <tr><td class="mono">mdb-lib / MdbLib.kt</td><td>The state machine of sections 06–09 plus the two-thread pipeline. Talks only to MdbSlaveWrapper, MdbConfigStore, MdbSettings, and the offload queue.</td></tr>
+        <tr><td class="mono">hardware-lib / HardwareLib.kt</td><td>The state machine of sections 06–09 plus the two-thread pipeline. Talks only to MdbSlaveWrapper, MdbConfigStore, MdbSettings, and the offload queue.</td></tr>
         <tr><td class="mono">app / MdbSlaveActivity.kt</td><td>The thin reference integration: startup wiring + on-screen log mirror. Any host app replaces this file.</td></tr>
-        <tr><td class="mono">mdb-lib / MdbSlaveWrapper.kt</td><td>Real CM30 I/O. Sends before logging; computes and appends the CHK byte; every payload fetched fresh from MdbConfigStore per send.</td></tr>
+        <tr><td class="mono">hardware-lib / MdbSlaveWrapper.kt</td><td>Real CM30 I/O. Sends before logging; computes and appends the CHK byte; every payload fetched fresh from MdbConfigStore per send.</td></tr>
         <tr><td class="mono">mqtt-lib / MqttLib.kt</td><td>MQTT 3.1.1 by hand (optional broker auth). Per-device topics; one bounded queue + one publisher thread; reconnect loop; command listener chain.</td></tr>
         <tr><td class="mono">mqtt-lib / RabbahLog.kt + RabbahLogEvent.kt</td><td>The compact log envelope and the MDB/INFO codebooks; serves CODEBOOK_JSON on getCodebook.</td></tr>
         <tr><td class="mono">mqtt-lib / RabbahMqtt.kt</td><td>Generic app-facing API: sendLog/sendError, onCommand, sendText/sendJson/subscribeText/subscribeJson on any topic.</td></tr>
-        <tr><td class="mono">mdb-lib / MdbSettings.kt</td><td>SharedPreferences: session mode, cancel mode, MDB level, MQTT log muting, three traffic-visibility flags.</td></tr>
-        <tr><td class="mono">mdb-lib / MdbConfigStore.kt</td><td>SharedPreferences: the raw hex of every response payload, length-locked (Begin Session 1–35 free), remotely editable — including the L3 feature bits that gate Always Idle.</td></tr>
+        <tr><td class="mono">hardware-lib / MdbSettings.kt</td><td>SharedPreferences: session mode, cancel mode, MDB level, MQTT log muting, three traffic-visibility flags.</td></tr>
+        <tr><td class="mono">hardware-lib / MdbConfigStore.kt</td><td>SharedPreferences: the raw hex of every response payload, length-locked (Begin Session 1–35 free), remotely editable — including the L3 feature bits that gate Always Idle.</td></tr>
         <tr><td class="mono">log-viewer.html</td><td>The PC control surface. Subscribes to all devices' logs, commands the selected one, renders level-aware config rows, and treats device acks — not sends — as success.</td></tr>
       </tbody>
     </table></div>
@@ -794,7 +863,7 @@
 </main>
 
 <footer>
-  CM30 MDB Slave project. Current as of app v2.13.7 (build 55) / mdb-lib 6.4.1 / mqtt-lib 1.3.1: compact RabbahLog codebook envelope, generic RabbahMqtt API, broker auth, backend-contract topic suffixes, retained online/offline presence (birth + LWT), two-thread timing
+  CM30 MDB Slave project. Current as of app v2.13.7 (build 55) / hardware-lib 7.0.0 / mqtt-lib 1.3.1: compact RabbahLog codebook envelope, generic RabbahMqtt API, broker auth, backend-contract topic suffixes, retained online/offline presence (birth + LWT), two-thread timing
   engine (bus + offload), JUST RESET consumed once setup starts, order-independent setup retries,
   REVALUE handling, and variable-length BEGIN SESSION payloads. Handshakes and bit layouts
   verified against the MDB/ICP v4.3 specification and against real machine traces.

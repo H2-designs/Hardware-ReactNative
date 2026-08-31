@@ -5,7 +5,7 @@ Two things live here:
 
 | Folder / file | What it is |
 |---|---|
-| `react-native-mdb/` | **The RN library** — a thin native bridge over `mdb-lib` + `mqtt-lib` (the proven Kotlin AARs are bundled inside). Full vend/payment flow, dashboard link, settings, hex configs — everything the native API has, as JS functions + events. |
+| `react-native-mdb/` | **The RN library** — a thin native bridge over `hardware-lib` (the MDB engine, no networking inside) + `mqtt-lib` (the proven Kotlin AARs are bundled inside; the MQTT glue lives in `initMdb()`). Full vend/payment flow, dashboard link, settings, hex configs, CMD-coded exchange events — everything the native API has, as JS functions + events. |
 | `MdbDemo/` | **The demo app** (reference integration) — status badge, live log, and a vend-approval sheet. `MdbDemo/App.tsx` is the file to read. |
 | `MdbRnDemo-v1.0.0-release.apk` | **Prebuilt release APK** of the demo — standalone, no Metro needed. |
 | `dashboard/log-viewer.html` | **The live MQTT dashboard** — open in any browser, pick the device, send remote commands. Same file the native app uses. |
@@ -27,7 +27,7 @@ Autolinking does the rest — no manual `settings.gradle` edits. Two requirement
 `android/build.gradle`:
 
 - `minSdkVersion = 30` (the CM30 terminal runs Android 11; the AARs are built for it)
-- nothing else — the three AARs (mdb-lib, mqtt-lib, CM30 vendor) ship inside the package.
+- nothing else — the three AARs (hardware-lib, mqtt-lib, CM30 vendor) ship inside the package.
 
 ## Quick start
 

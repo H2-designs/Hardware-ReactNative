@@ -154,7 +154,7 @@
   <h1>The two-library architecture</h1>
   <p class="lede">
     Everything proven in the MDB Slave app now lives in two Android libraries —
-    <code class="cmd">mqtt-lib</code> and <code class="cmd">mdb-lib</code> — consumed as AARs.
+    <code class="cmd">mqtt-lib</code> and <code class="cmd">hardware-lib</code> — consumed as AARs.
     This is the as-built reference: module boundaries, every data flow, the payment-gateway
     <code class="cmd">VendListener</code>, and the exact public API. The demo app is a ~140-line
     thin integration of exactly what any Android developer would write.
@@ -164,14 +164,14 @@
     <h2><span class="eyebrow">01 — the boundaries</span>Module & dependency diagram</h2>
     <p>
       Two libraries, one demo app. The dependency arrow points one way only:
-      <code class="cmd">mdb-lib</code> uses <code class="cmd">mqtt-lib</code>'s queue to ship its
+      <code class="cmd">hardware-lib</code> uses <code class="cmd">mqtt-lib</code>'s queue to ship its
       data to the dashboard; <code class="cmd">mqtt-lib</code> has zero knowledge of MDB. The
       developer's own app depends on both and can use <code class="cmd">mqtt-lib</code>
       independently (for its own logs) even where MDB isn't involved.
     </p>
 
     <figure>
-      <svg viewBox="0 0 900 430" role="img" aria-label="Module diagram: the developer's Android app depends on both mdb-lib and mqtt-lib. mdb-lib depends on mqtt-lib (enqueue only) and bundles the CM30 vendor AAR. mqtt-lib depends on nothing but the Android SDK. Each box lists what it contains and exposes.">
+      <svg viewBox="0 0 900 430" role="img" aria-label="Module diagram: the developer's Android app depends on both hardware-lib and mqtt-lib. hardware-lib depends on mqtt-lib (enqueue only) and bundles the CM30 vendor AAR. mqtt-lib depends on nothing but the Android SDK. Each box lists what it contains and exposes.">
         <defs>
           <marker id="marr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -184,8 +184,8 @@
         <text x="450" y="86" text-anchor="middle" font-size="10.5" fill="var(--muted)">calls both libraries' public APIs</text>
 
         <rect x="80" y="180" width="360" height="130" rx="10" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.4"/>
-        <text x="260" y="208" text-anchor="middle" font-size="14" font-weight="700" fill="var(--accent)">mdb-lib (AAR)</text>
-        <text x="260" y="230" text-anchor="middle" font-size="10.5" fill="var(--muted)">MdbLib — state machine, MDB levels 1/2/3</text>
+        <text x="260" y="208" text-anchor="middle" font-size="14" font-weight="700" fill="var(--accent)">hardware-lib (AAR)</text>
+        <text x="260" y="230" text-anchor="middle" font-size="10.5" fill="var(--muted)">HardwareLib — state machine, MDB levels 1/2/3</text>
         <text x="260" y="246" text-anchor="middle" font-size="10.5" fill="var(--muted)">MdbConfigStore — hex payloads, JSON parsing, persistence</text>
         <text x="260" y="262" text-anchor="middle" font-size="10.5" fill="var(--muted)">MdbSettings — level, session mode, cancel mode</text>
         <text x="260" y="278" text-anchor="middle" font-size="10.5" fill="var(--muted)">CM30 transport (real hardware; vendor .aar bundled)</text>
@@ -201,7 +201,7 @@
 
         <rect x="80" y="360" width="360" height="50" rx="10" fill="none" stroke="currentColor" stroke-dasharray="4 3" opacity="0.6"/>
         <text x="260" y="382" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">CM30 vendor .aar (MdbSlave hardware I/O)</text>
-        <text x="260" y="398" text-anchor="middle" font-size="9.5" fill="var(--muted)">a runtime dependency of mdb-lib — invisible to the app developer's code</text>
+        <text x="260" y="398" text-anchor="middle" font-size="9.5" fill="var(--muted)">a runtime dependency of hardware-lib — invisible to the app developer's code</text>
 
         <line x1="330" y1="106" x2="280" y2="178" stroke="currentColor" marker-end="url(#marr)"/>
         <text x="268" y="140" text-anchor="middle" font-size="9.5" fill="var(--muted)">depends on</text>
@@ -215,20 +215,89 @@
         <line x1="260" y1="310" x2="260" y2="358" stroke="currentColor" marker-end="url(#marr)"/>
       </svg>
       <figcaption>
-        One-way dependency: mdb-lib → mqtt-lib. The reverse never happens, so mqtt-lib stays
+        One-way dependency: hardware-lib → mqtt-lib. The reverse never happens, so mqtt-lib stays
         reusable for any project. The simulator flavor was removed — this is real-hardware only.
       </figcaption>
     </figure>
 
     <div class="callout">
       <p>
-        <strong>Why mdb-lib calls the queue directly (instead of the app relaying):</strong> MDB
+        <strong>Why hardware-lib calls the queue directly (instead of the app relaying):</strong> MDB
         data reaches the dashboard without the app developer writing any glue — install both
         AARs, call <code class="cmd">init()</code>, done. The engine still exposes local
         listeners so the app can mirror the same data in its own UI, but the MQTT path works
         even if the app ignores them.
       </p>
     </div>
+  </section>
+
+
+  <!-- ============================================================ -->
+  <section id="split700">
+    <h2><span class="eyebrow">NEW &mdash; the 7.0.0 split</span>hardware-lib: the MDB engine, MQTT-free</h2>
+    <p><strong>mdb-lib is now <code>hardware-lib-7.0.0</code></strong> &mdash; renamed, and with the
+    entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
+    produces exits through listeners, everything it accepts enters through plain functions.
+    The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
+    <code>typealias MdbLib = HardwareLib</code> keeps existing code compiling.</p>
+    <p>The MQTT wiring that used to be automatic now lives in a ~30-line app-side bridge
+    (<code>MdbMqttBridge.kt</code>, shipped in <code>samples/</code>) that reproduces the old wire
+    format <em>byte-identically</em> &mdash; the dashboard needs zero changes:</p>
+    <pre class="code"><span class="c">// the whole bridge - attach BEFORE HardwareLib.init():</span>
+MqttLib.addCommandListener { HardwareLib.handleCommand(it) }        <span class="c">// commands in</span>
+HardwareLib.controlListener = { tag, payload -&gt;                     <span class="c">// control plane out</span>
+    <span class="k">if</span> (tag == <span class="s">"LOG"</span>) MqttLib.enqueue(payload) <span class="k">else</span> MqttLib.enqueue(<span class="s">"$tag:$payload"</span>)
+}
+HardwareLib.exchangeListener = { e -&gt;                               <span class="c">// exchanges out</span>
+    <span class="k">if</span> (e.publishRemote) {
+        RabbahLog.sessionId = e.sessionId
+        RabbahLog.log(MdbLogEvent.valueOf(e.logEventName), e.params)
+    }
+}</pre>
+    <p><strong>New listener surface:</strong>
+    <code>stateListener</code> (plain state name, edge-triggered on every transition),
+    <code>exchangeListener</code> (one structured <code>MdbExchangeEvent</code> per exchange),
+    <code>controlListener</code> (tag + JSON for SETTINGS_JSON / CONFIG_JSON / VMC_STATUS / LOG),
+    plus the existing <code>vendListener</code> / <code>logListener</code> / <code>statusListener</code>.
+    <strong>New input:</strong> <code>HardwareLib.handleCommand(text): Boolean</code> &mdash; feed it
+    whatever any transport receives; it consumes what it recognizes.</p>
+    <p><strong>The CMD code schema.</strong> Every exchange carries one stable integer code
+    (<code>MdbCmd</code>, append-only). Edit a reply by number with
+    <code>setReplyHex(code, hex)</code> / read it with <code>getReplyHex(code)</code>; the last
+    frame the VMC sent per code is saved &mdash; <code>lastReceivedHex(code)</code> /
+    <code>lastReceivedJson()</code>:</p>
+    
+<table>
+  <thead><tr><th>Code</th><th>VMC sends</th><th>We reply</th><th>Reply hex editable?</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>RESET (10)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>2</td><td>POLL (12)</td><td>JUST RESET</td><td><code>JUST_RESET</code></td></tr>
+    <tr><td>3</td><td>SETUP CONFIG (11 00)</td><td>READER CONFIG DATA</td><td><code>READER_CONFIG_DATA</code></td></tr>
+    <tr><td>4</td><td>EXPANSION REQUEST ID (17 00)</td><td>PERIPHERAL ID</td><td><code>READER_CONFIG_INFO</code> / <code>_L3</code> &mdash; VMC's ID payload captured</td></tr>
+    <tr><td>5</td><td>SETUP MAX/MIN PRICES (11 01)</td><td>ACK</td><td>fixed (rx captured)</td></tr>
+    <tr><td>6</td><td>EXPANSION ENABLE OPTIONS (17 04)</td><td>ACK</td><td>fixed (rx captured)</td></tr>
+    <tr><td>7</td><td>READER ENABLE (14 01)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>8</td><td>READER DISABLE (14 00)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>9</td><td>READER CANCEL (14 02)</td><td>CANCELLED</td><td><code>CAN</code></td></tr>
+    <tr><td>10</td><td>POLL (12)</td><td>BEGIN SESSION</td><td><code>SESSION_BEGIN</code> / <code>_L2</code> (1&ndash;35 bytes)</td></tr>
+    <tr><td>11</td><td>VEND REQUEST (13 00)</td><td>ACK</td><td>fixed (price + item captured)</td></tr>
+    <tr><td>12</td><td>POLL (12)</td><td>VEND APPROVED</td><td><code>VEND_APPROVED</code></td></tr>
+    <tr><td>13</td><td>POLL (12)</td><td>VEND DENIED</td><td><code>VEND_DENIED</code></td></tr>
+    <tr><td>14</td><td>VEND SUCCESS (13 02)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>15</td><td>VEND FAILURE (13 03)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>16</td><td>VEND SESSION COMPLETE (13 04)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>17</td><td>POLL (12)</td><td>END SESSION</td><td><code>END_SESSION</code></td></tr>
+    <tr><td>18</td><td>VEND CANCEL (13 01)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>19</td><td>POLL (12)</td><td>SESSION CANCEL REQUEST</td><td><code>SESSION_CANCEL</code></td></tr>
+    <tr><td>20</td><td>REVALUE REQUEST (15 00)</td><td>REVALUE DENIED</td><td><code>REVALUE_DENIED</code></td></tr>
+    <tr><td>21</td><td>REVALUE LIMIT REQUEST (15 01)</td><td>REVALUE LIMIT AMOUNT</td><td><code>REVALUE_LIMIT</code></td></tr>
+    <tr><td>22</td><td>CASH SALE (13 05)</td><td>ACK</td><td>fixed (price + item captured)</td></tr>
+    <tr><td>23</td><td>POLL (12), idle</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>24</td><td>EXPANSION, other subcommand</td><td>(varies)</td><td>&mdash;</td></tr>
+    <tr><td>90</td><td>other peripheral (outside 10&ndash;17)</td><td>(ignored)</td><td>&mdash;</td></tr>
+    <tr><td>99</td><td>unrecognized in current state</td><td>(none)</td><td>&mdash;</td></tr>
+  </tbody>
+</table>
   </section>
 
   <section id="queue">
@@ -242,7 +311,7 @@
     </p>
 
     <figure>
-      <svg viewBox="0 0 940 360" role="img" aria-label="Queue flow: three producers — the MDB engine inside mdb-lib, MdbConfigStore acks, and the app developer's own code — all call enqueue() on the bounded outbound queue in mqtt-lib. A single publisher thread drains the queue and writes MQTT PUBLISH packets to the broker, which relays to the dashboard. If the queue is full the oldest message is dropped and a counter increments. While disconnected the queue buffers and drains on reconnect.">
+      <svg viewBox="0 0 940 360" role="img" aria-label="Queue flow: three producers — the MDB engine inside hardware-lib, MdbConfigStore acks, and the app developer's own code — all call enqueue() on the bounded outbound queue in mqtt-lib. A single publisher thread drains the queue and writes MQTT PUBLISH packets to the broker, which relays to the dashboard. If the queue is full the oldest message is dropped and a counter increments. While disconnected the queue buffers and drains on reconnect.">
         <defs>
           <marker id="qarr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -253,11 +322,11 @@
         </defs>
 
         <rect x="20" y="30" width="200" height="56" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
-        <text x="120" y="53" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--accent)">MdbLib engine (mdb-lib)</text>
+        <text x="120" y="53" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--accent)">HardwareLib engine (hardware-lib)</text>
         <text x="120" y="70" text-anchor="middle" font-size="9.5" fill="var(--muted)">RX/TX lines · VMC_STATUS heartbeat</text>
 
         <rect x="20" y="110" width="200" height="56" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
-        <text x="120" y="133" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--accent)">MdbConfigStore (mdb-lib)</text>
+        <text x="120" y="133" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--accent)">MdbConfigStore (hardware-lib)</text>
         <text x="120" y="150" text-anchor="middle" font-size="9.5" fill="var(--muted)">config acks · CONFIG_JSON snapshots</text>
 
         <rect x="20" y="190" width="200" height="56" rx="8" fill="var(--surface)" stroke="currentColor"/>
@@ -312,7 +381,7 @@
     <h2><span class="eyebrow">03 — one door in</span>Inbound command flow</h2>
     <p>
       Incoming MQTT messages are dispatched to <strong>registered listeners in order</strong>.
-      <code class="cmd">mdb-lib</code> registers its listener during <code class="cmd">init()</code>
+      <code class="cmd">hardware-lib</code> registers its listener during <code class="cmd">init()</code>
       and consumes every command it recognizes; the app developer registers their own for their
       custom commands. A listener returns <code class="cmd">true</code> ("consumed") to stop the
       chain. <code class="cmd">ping</code> is answered (<code class="cmd">PONG</code>) by mqtt-lib
@@ -321,7 +390,7 @@
     </p>
 
     <figure>
-      <svg viewBox="0 0 940 330" role="img" aria-label="Inbound flow: the dashboard publishes to the commands topic on the broker; mqtt-lib's reader thread receives the message, answers ping itself, and passes everything else through the listener chain — first mdb-lib's auto-registered handler which consumes MDB commands and config JSON, then the app developer's handler for custom commands. Unconsumed messages produce an 'unknown command' log line back through the outbound queue.">
+      <svg viewBox="0 0 940 330" role="img" aria-label="Inbound flow: the dashboard publishes to the commands topic on the broker; mqtt-lib's reader thread receives the message, answers ping itself, and passes everything else through the listener chain — first hardware-lib's auto-registered handler which consumes MDB commands and config JSON, then the app developer's handler for custom commands. Unconsumed messages produce an 'unknown command' log line back through the outbound queue.">
         <defs>
           <marker id="carr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -341,7 +410,7 @@
         <text x="485" y="88" text-anchor="middle" font-size="9.5" fill="var(--muted)">everything else → listener chain</text>
 
         <rect x="630" y="20" width="290" height="70" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
-        <text x="775" y="44" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--accent)">1. mdb-lib listener (auto-registered)</text>
+        <text x="775" y="44" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--accent)">1. hardware-lib listener (auto-registered)</text>
         <text x="775" y="62" text-anchor="middle" font-size="9.5" fill="var(--muted)">engine control · settings · config JSON</text>
         <text x="775" y="77" text-anchor="middle" font-size="9.5" fill="var(--muted)">returns true = consumed, chain stops</text>
 
@@ -362,7 +431,7 @@
         <text x="800" y="198" font-size="9" fill="var(--muted)">not consumed</text>
       </svg>
       <figcaption>
-        First-consume-wins. mdb-lib recognizes its own commands by content; the developer adds
+        First-consume-wins. hardware-lib recognizes its own commands by content; the developer adds
         remote commands without touching either library.
       </figcaption>
     </figure>
@@ -378,7 +447,7 @@
     </p>
 
     <figure>
-      <svg viewBox="0 0 940 430" role="img" aria-label="Config flow: dashboard sends a config JSON over the commands topic. mdb-lib's listener recognizes it and hands the raw JSON to MdbConfigStore.applyJson. The store parses the JSON, validates each name exists and each hex value has exactly the locked byte length, persists valid entries to SharedPreferences, and builds a per-name result. Accepted values are used live by the engine on its very next send with no restart. The store then enqueues per-name acks plus a full CONFIG_JSON snapshot so the dashboard shows confirmed device state, never assumed state.">
+      <svg viewBox="0 0 940 430" role="img" aria-label="Config flow: dashboard sends a config JSON over the commands topic. hardware-lib's listener recognizes it and hands the raw JSON to MdbConfigStore.applyJson. The store parses the JSON, validates each name exists and each hex value has exactly the locked byte length, persists valid entries to SharedPreferences, and builds a per-name result. Accepted values are used live by the engine on its very next send with no restart. The store then enqueues per-name acks plus a full CONFIG_JSON snapshot so the dashboard shows confirmed device state, never assumed state.">
         <defs>
           <marker id="farr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -395,7 +464,7 @@
         <text x="345" y="76" text-anchor="middle" font-size="9.5" fill="var(--muted)">commands topic → listener chain</text>
 
         <rect x="490" y="30" width="170" height="66" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
-        <text x="575" y="55" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--accent)">mdb-lib listener</text>
+        <text x="575" y="55" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--accent)">hardware-lib listener</text>
         <text x="575" y="74" text-anchor="middle" font-size="9.5" fill="var(--muted)">recognizes config JSON,</text>
         <text x="575" y="87" text-anchor="middle" font-size="9.5" fill="var(--muted)">hands raw JSON to the store</text>
 
@@ -459,7 +528,7 @@
   <section id="mdbflow">
     <h2><span class="eyebrow">05 — the full loop</span>MDB data flow, end to end</h2>
     <figure>
-      <svg viewBox="0 0 940 300" role="img" aria-label="End-to-end MDB flow: the VMC talks to the CM30 transport inside mdb-lib; the MdbLib state machine answers on the bus, reading payloads from MdbConfigStore, and pushes every exchange line and heartbeat into mqtt-lib's outbound queue. The same lines are optionally delivered to the app's local logListener, and business vend events go to the vendListener. The queue's publisher thread ships everything to the dashboard.">
+      <svg viewBox="0 0 940 300" role="img" aria-label="End-to-end MDB flow: the VMC talks to the CM30 transport inside hardware-lib; the HardwareLib state machine answers on the bus, reading payloads from MdbConfigStore, and pushes every exchange line and heartbeat into mqtt-lib's outbound queue. The same lines are optionally delivered to the app's local logListener, and business vend events go to the vendListener. The queue's publisher thread ships everything to the dashboard.">
         <defs>
           <marker id="earr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -478,7 +547,7 @@
         <text x="245" y="152" text-anchor="middle" font-size="9" fill="var(--muted)">bytes + checksum</text>
 
         <rect x="345" y="100" width="130" height="80" rx="8" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.3"/>
-        <text x="410" y="130" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--accent)">MdbLib</text>
+        <text x="410" y="130" text-anchor="middle" font-size="11.5" font-weight="700" fill="var(--accent)">HardwareLib</text>
         <text x="410" y="148" text-anchor="middle" font-size="9" fill="var(--muted)">state machine</text>
         <text x="410" y="162" text-anchor="middle" font-size="9" fill="var(--muted)">levels 1/2/3</text>
 
@@ -537,7 +606,7 @@
     </p>
 
     <figure>
-      <svg viewBox="0 0 940 620" role="img" aria-label="Sequence diagram of a paid vend across four lanes: VMC, MdbLib, the app's VendListener, and the payment gateway. VEND REQUEST from the VMC is ACKed by MdbLib which fires onVendRequest to the app; the app authorizes with the gateway while MdbLib keeps answering polls with ACK; on approval the app calls approveVend and MdbLib sends VEND APPROVED on the next poll; the VMC dispenses and sends VEND SUCCESS, MdbLib fires onVendSuccess and the app captures the payment; SESSION COMPLETE then END SESSION close the session and onSessionEnded fires for cleanup. Alternates: a declined payment calls cancelVend leading to VEND DENIED; a failed dispense sends VEND FAILURE leading to onVendFailure and a refund.">
+      <svg viewBox="0 0 940 620" role="img" aria-label="Sequence diagram of a paid vend across four lanes: VMC, HardwareLib, the app's VendListener, and the payment gateway. VEND REQUEST from the VMC is ACKed by HardwareLib which fires onVendRequest to the app; the app authorizes with the gateway while HardwareLib keeps answering polls with ACK; on approval the app calls approveVend and HardwareLib sends VEND APPROVED on the next poll; the VMC dispenses and sends VEND SUCCESS, HardwareLib fires onVendSuccess and the app captures the payment; SESSION COMPLETE then END SESSION close the session and onSessionEnded fires for cleanup. Alternates: a declined payment calls cancelVend leading to VEND DENIED; a failed dispense sends VEND FAILURE leading to onVendFailure and a refund.">
         <defs>
           <marker id="varr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -557,7 +626,7 @@
         <rect x="45" y="18" width="110" height="34" rx="8" fill="none" stroke="currentColor" opacity="0.6"/>
         <text x="100" y="40" text-anchor="middle" font-size="12" font-weight="700" fill="currentColor">VMC</text>
         <rect x="285" y="18" width="110" height="34" rx="8" fill="var(--accent-soft)" stroke="var(--accent)"/>
-        <text x="340" y="40" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent)">MdbLib</text>
+        <text x="340" y="40" text-anchor="middle" font-size="12" font-weight="700" fill="var(--accent)">HardwareLib</text>
         <rect x="525" y="18" width="150" height="34" rx="8" fill="var(--warn-soft)" stroke="var(--warn)"/>
         <text x="600" y="40" text-anchor="middle" font-size="12" font-weight="700" fill="var(--warn)">App (VendListener)</text>
         <rect x="785" y="18" width="120" height="34" rx="8" fill="var(--surface)" stroke="currentColor"/>
@@ -595,7 +664,7 @@
 
         <!-- 6 approveVend -->
         <line x1="600" y1="275" x2="344" y2="275" stroke="var(--ok)" marker-end="url(#varrO)"/>
-        <text x="468" y="267" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--ok)">MdbLib.approveVend()</text>
+        <text x="468" y="267" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--ok)">HardwareLib.approveVend()</text>
 
         <!-- 7 VEND APPROVED -->
         <line x1="340" y1="305" x2="104" y2="305" stroke="var(--accent)" marker-end="url(#varrA)"/>
@@ -626,7 +695,7 @@
         <!-- alternates note -->
         <rect x="45" y="540" width="860" height="62" rx="8" fill="none" stroke="var(--err)" stroke-dasharray="4 3" opacity="0.8"/>
         <text x="475" y="562" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--err)">The two exits that are not a sale</text>
-        <text x="475" y="580" text-anchor="middle" font-size="10" fill="var(--muted)">Gateway DECLINED → MdbLib.cancelVend() → VEND DENIED goes out → session ends → onSessionEnded()</text>
+        <text x="475" y="580" text-anchor="middle" font-size="10" fill="var(--muted)">Gateway DECLINED → HardwareLib.cancelVend() → VEND DENIED goes out → session ends → onSessionEnded()</text>
         <text x="475" y="595" text-anchor="middle" font-size="10" fill="var(--muted)">Product JAMMED → VMC sends VEND FAILURE (13 03) → onVendFailure() → REFUND/void the hold → onSessionEnded()</text>
       </svg>
       <figcaption>
@@ -636,15 +705,15 @@
     </figure>
 
     <pre class="code"><span class="c">// once at setup (persisted, so genuinely once):</span>
-MdbLib.setCancelMode(MdbLib.CancelResponse.VEND_DENIED)
+HardwareLib.setCancelMode(HardwareLib.CancelResponse.VEND_DENIED)
 
-MdbLib.vendListener = <span class="k">object</span> : MdbLib.VendListener {
+HardwareLib.vendListener = <span class="k">object</span> : HardwareLib.VendListener {
     <span class="k">override fun</span> onVendRequest(amount: Double, minorUnits: Int, itemNumber: Int) {
         <span class="c">// minorUnits = 350 (EXACT integer halalas - for the gateway & money math)</span>
         <span class="c">// amount     = 3.5 (decimal, for display). MDB worker thread - pay async:</span>
         scope.launch {
-            <span class="k">if</span> (gateway.authorize(minorUnits)) MdbLib.approveVend()
-            <span class="k">else</span> MdbLib.cancelVend()          <span class="c">// simple call, uses the standing mode set above</span>
+            <span class="k">if</span> (gateway.authorize(minorUnits)) HardwareLib.approveVend()
+            <span class="k">else</span> HardwareLib.cancelVend()          <span class="c">// simple call, uses the standing mode set above</span>
         }
     }
     <span class="k">override fun</span> onVendSuccess(itemNumber: Int) { scope.launch { gateway.capture() } }
@@ -689,9 +758,9 @@ MdbLib.vendListener = <span class="k">object</span> : MdbLib.VendListener {
     <span class="k">val</span> droppedMessages: Long                             <span class="c">// queue-overflow counter</span>
 }</pre>
 
-    <h3>mdb-lib (6.4.1)</h3>
-    <pre class="code"><span class="k">object</span> MdbLib {
-    <span class="k">fun</span> init(context: Context)   <span class="c">// MQTT optional: without it MdbLib runs fully offline</span>
+    <h3>hardware-lib (6.4.1)</h3>
+    <pre class="code"><span class="k">object</span> HardwareLib {
+    <span class="k">fun</span> init(context: Context)   <span class="c">// MQTT optional: without it HardwareLib runs fully offline</span>
     <span class="k">fun</span> start() / stop()         <span class="c">// open/close the MDB port + worker loop</span>
 
     <span class="c">// vend actions</span>
@@ -748,18 +817,18 @@ MdbLib.vendListener = <span class="k">object</span> : MdbLib.VendListener {
     <div class="table-wrap"><table>
       <thead><tr><th>App function</th><th>Dashboard command</th></tr></thead>
       <tbody>
-        <tr><td class="mono">MdbLib.start() / stop()</td><td class="mono">open / close</td></tr>
-        <tr><td class="mono">MdbLib.beginSession()</td><td class="mono">beginSession</td></tr>
-        <tr><td class="mono">MdbLib.approveVend()</td><td class="mono">vendApprove</td></tr>
-        <tr><td class="mono">MdbLib.setCancelMode(...)</td><td class="mono">setCancelMode:sessionCancel|vendDenied</td></tr>
-        <tr><td class="mono">MdbLib.cancelVend()</td><td class="mono">cancelVend</td></tr>
-        <tr><td class="mono">MdbLib.cancelVend(response)</td><td class="mono">cancelVend:sessionCancel|vendDenied</td></tr>
-        <tr><td class="mono">MdbLib.setAutoSession(true|false)</td><td class="mono">setSessionMode:auto|manual</td></tr>
-        <tr><td class="mono">MdbLib.setMqttLogging(true|false)</td><td class="mono">setMqttLogging:on|off</td></tr>
-        <tr><td class="mono">MdbLib.setConfigHex / getConfigHex / resetConfig</td><td class="mono">setConfig: / getConfig / resetConfig: (+ JSON form)</td></tr>
-        <tr><td class="mono">MdbLib.setMdbLevel(1..3)</td><td class="mono">setMdbLevel:1|2|3</td></tr>
-        <tr><td class="mono">MdbLib.setPollVisibility / setUnhandledVisibility</td><td class="mono">setPollVisibility:on|off / setUnhandledVisibility:on|off</td></tr>
-        <tr><td class="mono">MdbLib.currentSettingsJson()</td><td class="mono">getSettings</td></tr>
+        <tr><td class="mono">HardwareLib.start() / stop()</td><td class="mono">open / close</td></tr>
+        <tr><td class="mono">HardwareLib.beginSession()</td><td class="mono">beginSession</td></tr>
+        <tr><td class="mono">HardwareLib.approveVend()</td><td class="mono">vendApprove</td></tr>
+        <tr><td class="mono">HardwareLib.setCancelMode(...)</td><td class="mono">setCancelMode:sessionCancel|vendDenied</td></tr>
+        <tr><td class="mono">HardwareLib.cancelVend()</td><td class="mono">cancelVend</td></tr>
+        <tr><td class="mono">HardwareLib.cancelVend(response)</td><td class="mono">cancelVend:sessionCancel|vendDenied</td></tr>
+        <tr><td class="mono">HardwareLib.setAutoSession(true|false)</td><td class="mono">setSessionMode:auto|manual</td></tr>
+        <tr><td class="mono">HardwareLib.setMqttLogging(true|false)</td><td class="mono">setMqttLogging:on|off</td></tr>
+        <tr><td class="mono">HardwareLib.setConfigHex / getConfigHex / resetConfig</td><td class="mono">setConfig: / getConfig / resetConfig: (+ JSON form)</td></tr>
+        <tr><td class="mono">HardwareLib.setMdbLevel(1..3)</td><td class="mono">setMdbLevel:1|2|3</td></tr>
+        <tr><td class="mono">HardwareLib.setPollVisibility / setUnhandledVisibility</td><td class="mono">setPollVisibility:on|off / setUnhandledVisibility:on|off</td></tr>
+        <tr><td class="mono">HardwareLib.currentSettingsJson()</td><td class="mono">getSettings</td></tr>
         <tr><td class="mono">MdbConfigStore.applyJson / set / resetToDefault / snapshotJson</td><td class="mono">config JSON / setConfig: / resetConfig: / getConfig</td></tr>
         <tr><td class="mono">MqttLib.isConnected</td><td class="mono">ping (answered PONG by mqtt-lib)</td></tr>
       </tbody>
@@ -769,8 +838,8 @@ MdbLib.vendListener = <span class="k">object</span> : MdbLib.VendListener {
     <pre class="code"><span class="c">// once, at startup:</span>
 MqttLib.init(MqttConfig(topicPrefix = <span class="s">"cm30-mdb/hamdan-rabbah"</span>, deviceId = myDeviceId))
 MqttLib.start()
-MdbLib.init(applicationContext)   <span class="c">// applicationContext: app-lifetime Context, for SharedPreferences</span>
-MdbLib.start()
+HardwareLib.init(applicationContext)   <span class="c">// applicationContext: app-lifetime Context, for SharedPreferences</span>
+HardwareLib.start()
 <span class="c">// MDB data now flows to the dashboard; all remote commands work. Add the VendListener above</span>
 <span class="c">// for payments, and share the queue for your own logs:</span>
 MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span>)</pre>
@@ -783,7 +852,7 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
       <tbody>
         <tr><td>publishLog() spawned <strong>a new thread per message</strong></td><td>One bounded queue + one publisher thread. Producers never block, never race.</td></tr>
         <tr><td>Engine → Activity → MqttBridge; the Activity was the glue</td><td>Engine enqueues directly; the app keeps optional local listeners purely for its own UI.</td></tr>
-        <tr><td>One big remote-command <code class="cmd">when</code> in the Activity</td><td>Listener chain: mdb-lib auto-registers, the app adds its own, first-consume-wins.</td></tr>
+        <tr><td>One big remote-command <code class="cmd">when</code> in the Activity</td><td>Listener chain: hardware-lib auto-registers, the app adds its own, first-consume-wins.</td></tr>
         <tr><td>No typed vend events — only log strings</td><td><code class="cmd">VendListener</code>: onVendRequest / onVendSuccess / onVendFailure / onSessionEnded, built for the authorize→capture→refund payment pattern.</td></tr>
         <tr><td>Config text commands parsed in the Activity</td><td>JSON contract handled inside <code class="cmd">MdbConfigStore.applyJson()</code>; legacy text form still accepted, so the existing dashboard needed zero changes.</td></tr>
         <tr><td>Device + simulator flavors</td><td>Simulator removed — real CM30 hardware only.</td></tr>
@@ -793,7 +862,7 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
     <div class="callout">
       <p>
         <strong>Artifacts:</strong> <code class="cmd">mqtt-lib-1.3.1.aar</code>,
-        <code class="cmd">mdb-lib-6.4.1.aar</code> (plus the bundled CM30 vendor .aar as its
+        <code class="cmd">hardware-lib-7.0.0.aar</code> (plus the bundled CM30 vendor .aar as its
         runtime dependency), the demo APK as the reference integration, and
         <code class="cmd">LIBRARY_README.md</code> for the integrating developer. Wire protocol
         unchanged throughout — the existing <code class="cmd">log-viewer.html</code> dashboard
@@ -804,6 +873,6 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
 </main>
 
 <footer>
-  CM30 MDB Slave project — library architecture, as built. Current as of mdb-lib 6.4.1 /
+  CM30 MDB Slave project — library architecture, as built. Current as of hardware-lib 7.0.0 /
   mqtt-lib 1.3.1 (demo app v2.13.7, build 55).
 </footer>

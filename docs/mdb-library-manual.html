@@ -125,20 +125,89 @@
 <main>
   <h1>Every command, and how it works</h1>
   <p class="lede">
-    The complete developer manual for <code class="cmd">mdb-lib</code> and
+    The complete developer manual for <code class="cmd">hardware-lib</code> and
     <code class="cmd">mqtt-lib</code>: every function with a working example, every dashboard
     command, and what actually happens inside when you call each one. Current as of
-    mdb-lib&nbsp;6.4.1 / mqtt-lib&nbsp;1.3.0.
+    hardware-lib&nbsp;7.0.0 / mqtt-lib&nbsp;1.3.1.
   </p>
+
+
+  <!-- ============================================================ -->
+  <section id="split700">
+    <h2><span class="eyebrow">NEW &mdash; the 7.0.0 split</span>hardware-lib: the MDB engine, MQTT-free</h2>
+    <p><strong>mdb-lib is now <code>hardware-lib-7.0.0</code></strong> &mdash; renamed, and with the
+    entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
+    produces exits through listeners, everything it accepts enters through plain functions.
+    The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
+    <code>typealias MdbLib = HardwareLib</code> keeps existing code compiling.</p>
+    <p>The MQTT wiring that used to be automatic now lives in a ~30-line app-side bridge
+    (<code>MdbMqttBridge.kt</code>, shipped in <code>samples/</code>) that reproduces the old wire
+    format <em>byte-identically</em> &mdash; the dashboard needs zero changes:</p>
+    <pre class="code"><span class="c">// the whole bridge - attach BEFORE HardwareLib.init():</span>
+MqttLib.addCommandListener { HardwareLib.handleCommand(it) }        <span class="c">// commands in</span>
+HardwareLib.controlListener = { tag, payload -&gt;                     <span class="c">// control plane out</span>
+    <span class="k">if</span> (tag == <span class="s">"LOG"</span>) MqttLib.enqueue(payload) <span class="k">else</span> MqttLib.enqueue(<span class="s">"$tag:$payload"</span>)
+}
+HardwareLib.exchangeListener = { e -&gt;                               <span class="c">// exchanges out</span>
+    <span class="k">if</span> (e.publishRemote) {
+        RabbahLog.sessionId = e.sessionId
+        RabbahLog.log(MdbLogEvent.valueOf(e.logEventName), e.params)
+    }
+}</pre>
+    <p><strong>New listener surface:</strong>
+    <code>stateListener</code> (plain state name, edge-triggered on every transition),
+    <code>exchangeListener</code> (one structured <code>MdbExchangeEvent</code> per exchange),
+    <code>controlListener</code> (tag + JSON for SETTINGS_JSON / CONFIG_JSON / VMC_STATUS / LOG),
+    plus the existing <code>vendListener</code> / <code>logListener</code> / <code>statusListener</code>.
+    <strong>New input:</strong> <code>HardwareLib.handleCommand(text): Boolean</code> &mdash; feed it
+    whatever any transport receives; it consumes what it recognizes.</p>
+    <p><strong>The CMD code schema.</strong> Every exchange carries one stable integer code
+    (<code>MdbCmd</code>, append-only). Edit a reply by number with
+    <code>setReplyHex(code, hex)</code> / read it with <code>getReplyHex(code)</code>; the last
+    frame the VMC sent per code is saved &mdash; <code>lastReceivedHex(code)</code> /
+    <code>lastReceivedJson()</code>:</p>
+    
+<table>
+  <thead><tr><th>Code</th><th>VMC sends</th><th>We reply</th><th>Reply hex editable?</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>RESET (10)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>2</td><td>POLL (12)</td><td>JUST RESET</td><td><code>JUST_RESET</code></td></tr>
+    <tr><td>3</td><td>SETUP CONFIG (11 00)</td><td>READER CONFIG DATA</td><td><code>READER_CONFIG_DATA</code></td></tr>
+    <tr><td>4</td><td>EXPANSION REQUEST ID (17 00)</td><td>PERIPHERAL ID</td><td><code>READER_CONFIG_INFO</code> / <code>_L3</code> &mdash; VMC's ID payload captured</td></tr>
+    <tr><td>5</td><td>SETUP MAX/MIN PRICES (11 01)</td><td>ACK</td><td>fixed (rx captured)</td></tr>
+    <tr><td>6</td><td>EXPANSION ENABLE OPTIONS (17 04)</td><td>ACK</td><td>fixed (rx captured)</td></tr>
+    <tr><td>7</td><td>READER ENABLE (14 01)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>8</td><td>READER DISABLE (14 00)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>9</td><td>READER CANCEL (14 02)</td><td>CANCELLED</td><td><code>CAN</code></td></tr>
+    <tr><td>10</td><td>POLL (12)</td><td>BEGIN SESSION</td><td><code>SESSION_BEGIN</code> / <code>_L2</code> (1&ndash;35 bytes)</td></tr>
+    <tr><td>11</td><td>VEND REQUEST (13 00)</td><td>ACK</td><td>fixed (price + item captured)</td></tr>
+    <tr><td>12</td><td>POLL (12)</td><td>VEND APPROVED</td><td><code>VEND_APPROVED</code></td></tr>
+    <tr><td>13</td><td>POLL (12)</td><td>VEND DENIED</td><td><code>VEND_DENIED</code></td></tr>
+    <tr><td>14</td><td>VEND SUCCESS (13 02)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>15</td><td>VEND FAILURE (13 03)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>16</td><td>VEND SESSION COMPLETE (13 04)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>17</td><td>POLL (12)</td><td>END SESSION</td><td><code>END_SESSION</code></td></tr>
+    <tr><td>18</td><td>VEND CANCEL (13 01)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>19</td><td>POLL (12)</td><td>SESSION CANCEL REQUEST</td><td><code>SESSION_CANCEL</code></td></tr>
+    <tr><td>20</td><td>REVALUE REQUEST (15 00)</td><td>REVALUE DENIED</td><td><code>REVALUE_DENIED</code></td></tr>
+    <tr><td>21</td><td>REVALUE LIMIT REQUEST (15 01)</td><td>REVALUE LIMIT AMOUNT</td><td><code>REVALUE_LIMIT</code></td></tr>
+    <tr><td>22</td><td>CASH SALE (13 05)</td><td>ACK</td><td>fixed (price + item captured)</td></tr>
+    <tr><td>23</td><td>POLL (12), idle</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>24</td><td>EXPANSION, other subcommand</td><td>(varies)</td><td>&mdash;</td></tr>
+    <tr><td>90</td><td>other peripheral (outside 10&ndash;17)</td><td>(ignored)</td><td>&mdash;</td></tr>
+    <tr><td>99</td><td>unrecognized in current state</td><td>(none)</td><td>&mdash;</td></tr>
+  </tbody>
+</table>
+  </section>
 
   <!-- ============================================================ -->
   <section id="start">
     <h2><span class="eyebrow">01</span>Getting started</h2>
     <p>Add the AARs (or the Gradle modules) and initialize once at app startup:</p>
     <pre class="code"><span class="c">// build.gradle (raw AARs; skip if using the Gradle modules directly)</span>
-implementation files(<span class="s">'libs/mqtt-lib-1.3.0.aar'</span>)
-implementation files(<span class="s">'libs/mdb-lib-6.4.1.aar'</span>)
-implementation files(<span class="s">'libs/CM30-HardwareLibrary-1.0.9.aar'</span>)  <span class="c">// mdb-lib's hardware runtime</span></pre>
+implementation files(<span class="s">'libs/mqtt-lib-1.3.1.aar'</span>)
+implementation files(<span class="s">'libs/hardware-lib-7.0.0.aar'</span>)
+implementation files(<span class="s">'libs/CM30-HardwareLibrary-1.0.9.aar'</span>)  <span class="c">// hardware-lib's hardware runtime</span></pre>
 
     <pre class="code"><span class="c">// In your Application class or first Activity - the whole startup:</span>
 <span class="k">val</span> deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
@@ -146,14 +215,14 @@ implementation files(<span class="s">'libs/CM30-HardwareLibrary-1.0.9.aar'</span
 
 MqttLib.init(MqttConfig(topicPrefix = <span class="s">"cm30-mdb/hamdan-rabbah"</span>, deviceId = deviceId))
 MqttLib.start()                          <span class="c">// connect + reconnect loop + publisher thread</span>
-MdbLib.init(applicationContext)          <span class="c">// persistence + auto-registers its command listener</span>
-MdbLib.start()                           <span class="c">// open the MDB port + worker loop</span>
+MdbMqttBridge.attach()                   <span class="c">// the ~30-line glue (see the split section above)</span>
+HardwareLib.init(applicationContext)          <span class="c">// persistence + settings restore (no networking inside)</span>
+HardwareLib.start()                           <span class="c">// open the MDB port + worker loop</span>
 <span class="c">// From here: all MDB data streams to the dashboard, all remote commands work.</span></pre>
 
     <ul>
       <li><strong>Order matters, gently:</strong> call <code class="cmd">MqttLib.init()</code>
-      before <code class="cmd">MdbLib.init()</code> if you want the dashboard link — MdbLib
-      registers its command listener during its own init. (Skipping MQTT completely is also
+      and attach the bridge before <code class="cmd">HardwareLib.init()</code> if you want the dashboard link — init() publishes the first settings snapshot through the bridge. (Skipping MQTT completely is also
       fine — see the next section.)</li>
       <li><strong><code class="cmd">applicationContext</code></strong> is the app-lifetime Android
       Context — the library needs it only for SharedPreferences. Passing an Activity works too
@@ -169,13 +238,13 @@ MdbLib.start()                           <span class="c">// open the MDB port + 
     <h2><span class="eyebrow">02</span>What if I never initialize MQTT — does everything break?</h2>
     <p><strong>No. MDB runs fully offline.</strong> This was a real bug found while writing this
     manual — before mqtt-lib&nbsp;1.1.0, skipping <code class="cmd">MqttLib.init()</code> made
-    <code class="cmd">MdbLib.init()</code> crash on an uninitialized topic. Fixed: every MQTT
+    <code class="cmd">HardwareLib.init()</code> crash on an uninitialized topic. Fixed: every MQTT
     call is now safe in every order.</p>
 
     <div class="table-wrap"><table>
       <thead><tr><th>You skipped MQTT and…</th><th>What happens now</th></tr></thead>
       <tbody>
-        <tr><td><code>MdbLib.init()</code> / <code>start()</code></td><td>Works fully. Bus handshake, vend flow, VendListener, logListener, statusListener, settings, hex configs — all normal.</td></tr>
+        <tr><td><code>HardwareLib.init()</code> / <code>start()</code></td><td>Works fully. Bus handshake, vend flow, VendListener, logListener, statusListener, settings, hex configs — all normal.</td></tr>
         <tr><td>The engine tries to publish logs / status / acks</td><td>Each <code>enqueue()</code> is a <strong>silent no-op</strong>. Nothing thrown, nothing lost locally — only the remote log is absent.</td></tr>
         <tr><td>Dashboard remote commands</td><td>Don't arrive (there's no connection) — use the equivalent Android functions instead; every command has one.</td></tr>
         <tr><td><code>MqttLib.enqueue("...")</code> from your own code</td><td>Silent no-op.</td></tr>
@@ -185,9 +254,9 @@ MdbLib.start()                           <span class="c">// open the MDB port + 
     </table></div>
 
     <div class="callout ok">
-      <p><strong>Rule of thumb:</strong> MQTT is the optional half. mdb-lib never requires it to
+      <p><strong>Rule of thumb:</strong> MQTT is the optional half. hardware-lib never requires it to
       vend — it only uses it when it's there. The only hard requirement is
-      <code class="cmd">MdbLib.init(context)</code> before <code class="cmd">MdbLib.start()</code>
+      <code class="cmd">HardwareLib.init(context)</code> before <code class="cmd">HardwareLib.start()</code>
       (the engine needs its persisted settings and payloads loaded before touching the bus).</p>
     </div>
   </section>
@@ -207,27 +276,27 @@ MdbLib.start()                           <span class="c">// open the MDB port + 
     your caller and never fails because the broker is down — it just keeps retrying.
     <code class="cmd">stop()</code> closes the socket and parks both threads.</p>
 
-    <h3><code>MdbLib.init(context: Context)</code></h3>
+    <h3><code>HardwareLib.init(context: Context)</code></h3>
     <p>Loads persisted settings and hex payloads from SharedPreferences, and registers the MDB
     command listener on MqttLib (if MQTT is initialized, now or never — both fine). Idempotent:
     calling twice does nothing the second time.</p>
 
-    <h3><code>MdbLib.start()</code> / <code>MdbLib.stop()</code></h3>
+    <h3><code>HardwareLib.start()</code> / <code>HardwareLib.stop()</code></h3>
     <p><code class="cmd">start()</code> opens the CM30 MDB port and starts the worker loop that
     answers the VMC. All engine state resets to INACTIVE and the status is announced
     immediately. <code class="cmd">stop()</code> closes the port, resets to INACTIVE, and
     announces that too — the dashboard's status bar flips instantly, not on the next heartbeat.</p>
 
     <pre class="code"><span class="c">// Dashboard equivalents:  open  /  close</span>
-MdbLib.start()
-MdbLib.stop()</pre>
+HardwareLib.start()
+HardwareLib.stop()</pre>
   </section>
 
   <!-- ============================================================ -->
   <section id="vend">
     <h2><span class="eyebrow">04</span>Vend actions & the payment flow</h2>
 
-    <h3><code>MdbLib.vendListener</code> — the payment hook</h3>
+    <h3><code>HardwareLib.vendListener</code> — the payment hook</h3>
     <p>Four typed callbacks; override only what you need. All fire on a dedicated callback thread
     (never the bus thread itself — the bus loop only queues the event and goes straight back to
     answering the VMC, so even a slow callback can't make a response miss the machine's
@@ -238,9 +307,9 @@ MdbLib.stop()</pre>
     seconds of latency costs nothing on the bus.</p>
 
     <pre class="code"><span class="c">// The complete payment integration:</span>
-MdbLib.setCancelMode(MdbLib.CancelResponse.VEND_DENIED)   <span class="c">// once ever - persisted</span>
+HardwareLib.setCancelMode(HardwareLib.CancelResponse.VEND_DENIED)   <span class="c">// once ever - persisted</span>
 
-MdbLib.vendListener = <span class="k">object</span> : MdbLib.VendListener {
+HardwareLib.vendListener = <span class="k">object</span> : HardwareLib.VendListener {
 
     <span class="k">override fun</span> onVendRequest(amount: Double, minorUnits: Int, itemNumber: Int) {
         <span class="c">// amount = 3.5 (decimal, for display); minorUnits = 350 (EXACT integer</span>
@@ -248,8 +317,8 @@ MdbLib.vendListener = <span class="k">object</span> : MdbLib.VendListener {
         <span class="c">// already applied the scale factor. itemNumber = raw code, -1 if omitted.</span>
         scope.launch {
             <span class="k">val</span> ok = paymentGateway.authorize(minorUnits)  <span class="c">// HOLD the money, don't take it</span>
-            <span class="k">if</span> (ok) MdbLib.approveVend()                   <span class="c">// VEND APPROVED on next POLL</span>
-            <span class="k">else</span>    MdbLib.cancelVend()                    <span class="c">// standing cancel response</span>
+            <span class="k">if</span> (ok) HardwareLib.approveVend()                   <span class="c">// VEND APPROVED on next POLL</span>
+            <span class="k">else</span>    HardwareLib.cancelVend()                    <span class="c">// standing cancel response</span>
         }
     }
 
@@ -294,34 +363,34 @@ MdbLib.vendListener = <span class="k">object</span> : MdbLib.VendListener {
       aren't exactly representable — fine for showing on screen, wrong for accumulating totals.
       That's exactly why minorUnits exists.</li>
     </ul>
-    <p>Standalone converters are also public: <code class="cmd">MdbLib.priceToAmount(raw)</code>
-    and <code class="cmd">MdbLib.priceToMinorUnits(raw)</code>.</p>
+    <p>Standalone converters are also public: <code class="cmd">HardwareLib.priceToAmount(raw)</code>
+    and <code class="cmd">HardwareLib.priceToMinorUnits(raw)</code>.</p>
 
-    <h3><code>MdbLib.beginSession()</code></h3>
+    <h3><code>HardwareLib.beginSession()</code></h3>
     <p>Arms BEGIN SESSION for the next POLL — the "card tap". In auto-session mode (default)
     this is never needed; in manual mode it's the only thing that starts a session. Call it from
     your NFC/tap detection. <em>Dashboard: <code class="cmd">beginSession</code>.</em></p>
 
-    <h3><code>MdbLib.approveVend(): Boolean</code></h3>
+    <h3><code>HardwareLib.approveVend(): Boolean</code></h3>
     <p>Arms VEND APPROVED. Returns <code class="cmd">false</code> (and does nothing) if no VEND
     REQUEST is actually pending — an early or stale approval can never charge the next
     customer's selection. One call per vend; the response goes out on the next POLL.
     <em>Dashboard: <code class="cmd">vendApprove</code>.</em></p>
 
-    <h3><code>MdbLib.cancelVend(): Boolean</code></h3>
+    <h3><code>HardwareLib.cancelVend(): Boolean</code></h3>
     <p>The simple cancel: aborts the live session on the next POLL, sending the standing
     response configured once via <code class="cmd">setCancelMode()</code>. Works before OR after
     a VEND REQUEST (you can abort a session before the customer picks anything). No-op returning
     <code class="cmd">false</code> if no session is live. One call per cancel.
     <em>Dashboard: <code class="cmd">cancelVend</code>.</em></p>
 
-    <h3><code>MdbLib.cancelVend(response: CancelResponse): Boolean</code></h3>
+    <h3><code>HardwareLib.cancelVend(response: CancelResponse): Boolean</code></h3>
     <p>Same, but sends exactly <code class="cmd">SESSION_CANCEL_REQUEST</code> or
     <code class="cmd">VEND_DENIED</code> this one time, without touching the standing mode.
     <em>Dashboard: <code class="cmd">cancelVend:sessionCancel</code> /
     <code class="cmd">cancelVend:vendDenied</code>.</em></p>
 
-    <h3><code>MdbLib.setCancelMode(mode: CancelResponse)</code></h3>
+    <h3><code>HardwareLib.setCancelMode(mode: CancelResponse)</code></h3>
     <p>Set ONCE (persisted): what plain <code class="cmd">cancelVend()</code> sends, and how the
     VMC's own VEND CANCEL (13&nbsp;01) is answered. Different VMCs expect different responses —
     that's why it's configurable. <em>Dashboard: <code class="cmd">setCancelMode:sessionCancel</code>
@@ -331,17 +400,17 @@ MdbLib.vendListener = <span class="k">object</span> : MdbLib.VendListener {
   <!-- ============================================================ -->
   <section id="state">
     <h2><span class="eyebrow">05</span>Seeing the MDB state from Android</h2>
-    <pre class="code">MdbLib.currentState      <span class="c">// "INACTIVE_STATE" | "DISABLED_STATE" | "ENABLED_STATE" | "VEND_STATE"</span>
-MdbLib.isSessionActive   <span class="c">// true between BEGIN SESSION and END SESSION - the only window</span>
+    <pre class="code">HardwareLib.currentState      <span class="c">// "INACTIVE_STATE" | "DISABLED_STATE" | "ENABLED_STATE" | "VEND_STATE"</span>
+HardwareLib.isSessionActive   <span class="c">// true between BEGIN SESSION and END SESSION - the only window</span>
                          <span class="c">// where approveVend()/cancelVend() can do anything</span>
 
-MdbLib.statusListener = { json -&gt;
+HardwareLib.statusListener = { json -&gt;
     <span class="c">// {"state":"VEND_STATE","recentActivity":true}</span>
     <span class="c">// fires INSTANTLY on every state transition + every 3 s as a heartbeat</span>
     runOnUiThread { stateBadge.text = JSONObject(json).getString(<span class="s">"state"</span>) }
 }
 
-MdbLib.logListener = { line, showOnScreen -&gt;
+HardwareLib.logListener = { line, showOnScreen -&gt;
     <span class="c">// every log line the engine reports. showOnScreen == false marks per-poll</span>
     <span class="c">// noise (idle POLL/ACK, unhandled) - do NOT render those into a growing</span>
     <span class="c">// text view, that freezes a UI on real hardware. Never re-enqueue these.</span>
@@ -359,28 +428,28 @@ MdbLib.logListener = { line, showOnScreen -&gt;
     <p>All persisted in SharedPreferences (survive restarts), all mirrored to the dashboard via
     <code class="cmd">SETTINGS_JSON:</code> on every change, all settable from either side.</p>
 
-    <h3><code>MdbLib.setAutoSession(enabled: Boolean)</code> · <code>MdbLib.isAutoSession</code></h3>
+    <h3><code>HardwareLib.setAutoSession(enabled: Boolean)</code> · <code>HardwareLib.isAutoSession</code></h3>
     <p><code class="cmd">true</code> (default): sessions begin by themselves on READER ENABLE and
     after every END SESSION. <code class="cmd">false</code>: only
     <code class="cmd">beginSession()</code> starts one. Switching mid-session cancels the live
     session so the new mode applies immediately; switching while merely enabled arms/disarms on
     the spot. <em>Dashboard: <code class="cmd">setSessionMode:auto|manual</code>.</em></p>
 
-    <h3><code>MdbLib.setMdbLevel(level: Int)</code> — 1, 2, or 3</h3>
+    <h3><code>HardwareLib.setMdbLevel(level: Int)</code> — 1, 2, or 3</h3>
     <p>Changes which setup handshake runs, the feature level reported in READER CONFIG DATA, and
     which BEGIN SESSION / PERIPHERAL ID payloads are sent. Level 1: shortest, no EXPANSION
     commands. Level 2: adds EXPANSION REQUEST ID / Peripheral ID. Level 3: adds EXPANSION ENABLE
     OPTIONS + the 4 optional-feature-bits bytes. Throws on any other value.
     <em>Dashboard: <code class="cmd">setMdbLevel:1|2|3</code>.</em></p>
 
-    <h3><code>MdbLib.setPollVisibility(show)</code> · <code>setUnhandledVisibility(show)</code></h3>
+    <h3><code>HardwareLib.setPollVisibility(show)</code> · <code>setUnhandledVisibility(show)</code></h3>
     <p>Log-debug toggles: report idle POLL→ACK exchanges / report commands unrecognized in the
     current state. Off by default (noisy). They never touch the on-device screen path — only
     what gets reported remotely. <em>Dashboard:
     <code class="cmd">setPollVisibility:on|off</code>,
     <code class="cmd">setUnhandledVisibility:on|off</code>.</em></p>
 
-    <h3><code>MdbLib.setMqttLogging(enabled: Boolean)</code> · <code>isMqttLoggingEnabled</code></h3>
+    <h3><code>HardwareLib.setMqttLogging(enabled: Boolean)</code> · <code>isMqttLoggingEnabled</code></h3>
     <p>Master on/off for publishing the engine's <strong>log lines</strong> over MQTT. Persisted.
     While OFF: the local <code class="cmd">logListener</code> still gets every line (your
     on-device log keeps working), and the <strong>control plane keeps publishing</strong> —
@@ -389,11 +458,11 @@ MdbLib.logListener = { line, showOnScreen -&gt;
     to turn the stream back on. Only the log traffic goes quiet (useful to cut broker traffic in
     production, or when many devices share one topic prefix).
     <em>Dashboard: <code class="cmd">setMqttLogging:on|off</code>.</em></p>
-    <pre class="code">MdbLib.setMqttLogging(<span class="k">false</span>)   <span class="c">// production: quiet the remote log stream</span>
-MdbLib.setMqttLogging(<span class="k">true</span>)    <span class="c">// debugging session: stream everything again</span>
-MdbLib.isMqttLoggingEnabled    <span class="c">// current state</span></pre>
+    <pre class="code">HardwareLib.setMqttLogging(<span class="k">false</span>)   <span class="c">// production: quiet the remote log stream</span>
+HardwareLib.setMqttLogging(<span class="k">true</span>)    <span class="c">// debugging session: stream everything again</span>
+HardwareLib.isMqttLoggingEnabled    <span class="c">// current state</span></pre>
 
-    <h3><code>MdbLib.currentSettingsJson(): String</code></h3>
+    <h3><code>HardwareLib.currentSettingsJson(): String</code></h3>
     <p>Everything above as one JSON string — the same content the
     <code class="cmd">SETTINGS_JSON:</code> message carries (includes
     <code class="cmd">mqttLogsEnabled</code>).
@@ -414,26 +483,26 @@ MdbLib.isMqttLoggingEnabled    <span class="c">// current state</span></pre>
     dashboard's Config panel always shows confirmed device state.</p>
 
     <pre class="code"><span class="c">// read / write / reset - names via constants, never raw strings:</span>
-MdbLib.getConfigHex(MdbLib.ConfigName.SESSION_BEGIN)                <span class="c">// "03 FF FF"</span>
-MdbLib.setConfigHex(MdbLib.ConfigName.SESSION_BEGIN, <span class="s">"03 07 D0"</span>)    <span class="c">// null = ok, else error text</span>
-MdbLib.resetConfig(MdbLib.ConfigName.SESSION_BEGIN)                 <span class="c">// back to library default</span>
-MdbLib.configNames()                                                <span class="c">// all editable names</span>
-MdbLib.configSnapshotJson()                                         <span class="c">// everything as JSON</span>
+HardwareLib.getConfigHex(HardwareLib.ConfigName.SESSION_BEGIN)                <span class="c">// "03 FF FF"</span>
+HardwareLib.setConfigHex(HardwareLib.ConfigName.SESSION_BEGIN, <span class="s">"03 07 D0"</span>)    <span class="c">// null = ok, else error text</span>
+HardwareLib.resetConfig(HardwareLib.ConfigName.SESSION_BEGIN)                 <span class="c">// back to library default</span>
+HardwareLib.configNames()                                                <span class="c">// all editable names</span>
+HardwareLib.configSnapshotJson()                                         <span class="c">// everything as JSON</span>
 
 <span class="c">// BEGIN SESSION length is editable (1-35 bytes) - e.g. a feature-level-2 machine
 // that only accepts the short Level-1-style form:</span>
-MdbLib.setConfigHex(MdbLib.ConfigName.SESSION_BEGIN_L2, <span class="s">"03 FF FF"</span>)   <span class="c">// 3 bytes: accepted</span>
+HardwareLib.setConfigHex(HardwareLib.ConfigName.SESSION_BEGIN_L2, <span class="s">"03 FF FF"</span>)   <span class="c">// 3 bytes: accepted</span>
 
 <span class="c">// every other payload stays length-locked - validation is per call, handle the error:</span>
-<span class="k">val</span> err = MdbLib.setConfigHex(MdbLib.ConfigName.VEND_APPROVED, <span class="s">"05 07"</span>)
+<span class="k">val</span> err = HardwareLib.setConfigHex(HardwareLib.ConfigName.VEND_APPROVED, <span class="s">"05 07"</span>)
 <span class="c">// err == "Wrong length for VEND_APPROVED: got 2 byte(s), need 3"</span>
 
 <span class="c">// enable Level 3 "Always Idle" = bit 5 of the LAST feature byte (Z34):</span>
-MdbLib.setConfigHex(MdbLib.ConfigName.READER_CONFIG_INFO_L3,
+HardwareLib.setConfigHex(HardwareLib.ConfigName.READER_CONFIG_INFO_L3,
     <span class="s">"09 43 41 53 30 30 30 30 30 30 30 30 30 30 30 31 30 30 30 30 30 30 30 30 30 30 30 31 00 01 00 00 00 20"</span>)</pre>
 
     <div class="table-wrap"><table>
-      <thead><tr><th>MdbLib.ConfigName.…</th><th>Bytes</th><th>Payload</th></tr></thead>
+      <thead><tr><th>HardwareLib.ConfigName.…</th><th>Bytes</th><th>Payload</th></tr></thead>
       <tbody>
         <tr><td><code>READER_CONFIG_DATA</code></td><td>8</td><td>SETUP response: level, currency, scale factor, decimals, max response time, options. Level byte is overwritten at runtime from setMdbLevel.</td></tr>
         <tr><td><code>READER_CONFIG_INFO</code></td><td>30</td><td>Peripheral ID (Level 2): 09 + manufacturer×3 + serial×12 + model×12 + sw version×2 (all ASCII except code/version)</td></tr>
@@ -485,14 +554,14 @@ RabbahMqtt.removeCommand(cmdSub)
 RabbahMqtt.unsubscribe(s1)</pre>
     <p>Handlers run on the MQTT reader thread - return quickly, never block, hop to your own
     coroutine for real work. Return <code class="cmd">false</code> from
-    <code class="cmd">onCommand</code> for anything you don't recognize: mdb-lib's own listener
+    <code class="cmd">onCommand</code> for anything you don't recognize: hardware-lib's own listener
     sits on the same chain, <code class="cmd">ping</code> is answered
     (<code class="cmd">PONG</code>) by mqtt-lib itself, and anything nobody consumes is reported
     back as <code class="cmd">unknown command</code>.</p>
 
     <h3>RabbahLog - the compact envelope every log rides</h3>
     <p>Log lines are not free text on the wire. Each call becomes ONE compact JSON item on
-    <code class="cmd">liveLog</code> (single-letter keys, positional params); mdb-lib emits these
+    <code class="cmd">liveLog</code> (single-letter keys, positional params); hardware-lib emits these
     automatically for every bus exchange, and <code class="cmd">sendLog</code>/<code class="cmd">sendError</code>
     use the same path:</p>
     <pre class="code">RabbahLog.init(<span class="s">"vending-app"</span>, <span class="s">"2.13.5"</span>)   <span class="c">// once - stamps "a" and "v" on every item</span>
@@ -552,7 +621,7 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
     <div class="table-wrap"><table>
       <thead><tr><th>Command</th><th>What the device does</th><th>Reply on liveLog</th></tr></thead>
       <tbody>
-        <tr><td><code>open</code> / <code>close</code></td><td>MdbLib.start() / stop()</td><td>VMC_STATUS immediately</td></tr>
+        <tr><td><code>open</code> / <code>close</code></td><td>HardwareLib.start() / stop()</td><td>VMC_STATUS immediately</td></tr>
         <tr><td><code>beginSession</code></td><td>Arms BEGIN SESSION</td><td><code>[remote] begin session requested</code></td></tr>
         <tr><td><code>vendApprove</code></td><td>approveVend()</td><td>requested / <code>ignored — no VEND REQUEST pending</code></td></tr>
         <tr><td><code>cancelVend</code></td><td>cancel with the standing mode</td><td>requested (which response) / <code>ignored — no session in progress</code></td></tr>
@@ -594,6 +663,6 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
 </main>
 
 <footer>
-  CM30 MDB Slave project — developer manual. mdb-lib 6.4.1 · mqtt-lib 1.3.0 · demo app v2.13.6
+  CM30 MDB Slave project — developer manual. hardware-lib 7.0.0 · mqtt-lib 1.3.1 · demo app v2.13.9
   (build 54). Companion docs: the architecture reference and the interactive vend simulator.
 </footer>

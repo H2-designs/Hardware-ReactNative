@@ -10,8 +10,10 @@ import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.rabbah.mdb.MdbLib
 import com.rabbah.mdb.MdbConfigStore
+import com.rabbah.mqtt.MdbLogEvent
 import com.rabbah.mqtt.MqttConfig
 import com.rabbah.mqtt.MqttLib
+import com.rabbah.mqtt.RabbahLog
 
 /**
  * The React Native bridge for mdb-lib + mqtt-lib. A THIN shim, exactly as a Turbo/native module
@@ -26,7 +28,9 @@ import com.rabbah.mqtt.MqttLib
  *   MdbSessionEnded { }
  *   MdbLog          { line: string, showOnScreen: boolean }
  *   MdbStatus       { json: string }   // {"state": "...", "recentActivity": bool}
- *   MdbRemoteCommand{ command: string } // dashboard commands mdb-lib did not consume
+ *   MdbStateChanged { state: string }  // edge-triggered: INACTIVE/DISABLED/ENABLED/VEND_STATE
+ *   MdbExchange     { code: number, name, rxHex, txName, message, sessionId? } // CMD-coded
+ *   MdbRemoteCommand{ command: string } // dashboard commands the MDB engine did not consume
  */
 class MdbRnModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
@@ -58,6 +62,40 @@ class MdbRnModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun initMdb() {
+        // The MQTT bridge: since hardware-lib 7.0.0 the MDB engine contains no networking -
+        // these three wires put its events on the MQTT queue in the exact format the dashboard
+        // already speaks, and feed dashboard commands back in. Registered BEFORE init() so the
+        // first settings snapshot reaches the wire too.
+        MqttLib.addCommandListener { MdbLib.handleCommand(it) }
+        MdbLib.controlListener = { tag, payload ->
+            if (tag == "LOG") MqttLib.enqueue(payload) else MqttLib.enqueue("$tag:$payload")
+        }
+        MdbLib.exchangeListener = { e ->
+            if (e.publishRemote) {
+                RabbahLog.sessionId = e.sessionId
+                val event = try {
+                    MdbLogEvent.valueOf(e.logEventName)
+                } catch (_: IllegalArgumentException) {
+                    null
+                }
+                if (event != null) RabbahLog.log(event, e.params) else RabbahLog.raw(e.message)
+            }
+            // Structured feed for JS as well - one event per exchange, CMD-coded.
+            val map = Arguments.createMap()
+            map.putInt("code", e.code)
+            map.putString("name", e.cmd.name)
+            map.putString("rxHex", e.rxHex)
+            map.putString("txName", e.txName)
+            map.putString("message", e.message)
+            e.sessionId?.let { map.putString("sessionId", it) }
+            emit("MdbExchange", map)
+        }
+        MdbLib.stateListener = { state ->
+            val map = Arguments.createMap()
+            map.putString("state", state)
+            emit("MdbStateChanged", map)
+        }
+
         MdbLib.init(reactContext.applicationContext)
 
         MdbLib.vendListener = object : MdbLib.VendListener {
@@ -90,9 +128,9 @@ class MdbRnModule(private val reactContext: ReactApplicationContext) :
             emit("MdbStatus", map)
         }
 
-        // Registered AFTER MdbLib.init, so mdb-lib's own listener gets first look at every
-        // command; whatever it declines is forwarded to JS (and consumed, so the dashboard
-        // does not see "unknown command" for the app's own commands).
+        // Registered AFTER the handleCommand forwarder above, so the MDB engine gets first
+        // look at every command; whatever it declines is forwarded to JS (and consumed, so
+        // the dashboard does not see "unknown command" for the app's own commands).
         MqttLib.addCommandListener { cmd ->
             val map = Arguments.createMap()
             map.putString("command", cmd)

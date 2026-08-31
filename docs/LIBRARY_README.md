@@ -1,0 +1,351 @@
+# hardware-lib + mqtt-lib — integration guide
+
+Two fully decoupled Android libraries extracted from the proven MDB Slave app:
+
+| Artifact | What it is |
+|---|---|
+| `hardware-lib-7.0.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
+| `mqtt-lib-1.3.1.aar` | MQTT 3.1.1 transport (queue + publisher thread + auto-reconnect, broker **username/password** auth, retained presence/LWT) **plus the Rabbah compact-log layer**: `RabbahLog`, the unified MDB/INFO codebooks, and `RabbahMqtt` (send/receive logs, text or JSON on any topic — zero MDB involvement). |
+| `CM30-HardwareLibrary-1.0.9.aar` | The CM30 vendor serial driver (hardware-lib needs it at runtime; AARs do not nest). |
+
+## Architecture — who talks to whom
+
+```
+VMC bus ── CM30 serial ── MdbSlaveWrapper ── HardwareLib (state machine, NO networking)
+                                                │
+                              listeners out     │     functions in
+              ┌─────────────────────────────────┼──────────────────────────┐
+              │ vendListener      (payments)    │  handleCommand(text)     │
+              │ stateListener     (state name)  │  approveVend()/cancel…   │
+              │ exchangeListener  (CMD events)  │  setReplyHex(code, hex)  │
+              │ logListener       (lines)       │  setMdbLevel(...) etc.   │
+              │ controlListener   (tag, json)   │                          │
+              └─────────────────────────────────┴──────────────────────────┘
+                                                │
+                                     MdbMqttBridge (~30 lines, lives in the APP)
+                                                │
+                                            MqttLib ↔ broker ↔ dashboard
+```
+
+The bridge is the ONLY meeting point (full source: `app/src/main/java/.../MdbMqttBridge.kt`).
+Its three wires keep the MQTT format **byte-identical** to before the split, so the existing
+dashboard needs zero changes:
+
+```kotlin
+MqttLib.addCommandListener { HardwareLib.handleCommand(it) }          // commands in
+HardwareLib.controlListener = { tag, payload ->                        // control plane out
+    if (tag == "LOG") MqttLib.enqueue(payload) else MqttLib.enqueue("$tag:$payload")
+}
+HardwareLib.exchangeListener = { e ->                                  // exchanges out
+    if (e.publishRemote) {
+        RabbahLog.sessionId = e.sessionId
+        RabbahLog.log(MdbLogEvent.valueOf(e.logEventName), e.params)
+    }
+}
+```
+
+Want HTTP or BLE instead of MQTT? Write your own 30-line bridge against the same three hooks.
+Want no network at all? Attach no bridge — the engine, vend flow, and all local listeners work
+fully offline.
+
+> Migration note: the Kotlin package is still `com.rabbah.mdb` and a deprecated
+> `typealias MdbLib = HardwareLib` keeps old code compiling — the only hard change is the
+> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.0.0.aar`) and that MQTT
+> forwarding now needs the bridge attached.
+
+## The CMD code schema
+
+Every exchange the engine handles has ONE stable integer code (`MdbCmd`, append-only — codes
+are never renumbered). `exchangeListener` delivers them live; the hex APIs address them by
+number.
+
+| Code | VMC sends | We reply | Reply hex editable? | RX captured |
+|---|---|---|---|---|
+| 1 | RESET (10) | ACK | fixed | yes |
+| 2 | POLL (12) | JUST RESET | `JUST_RESET` | yes |
+| 3 | SETUP CONFIG (11 00) | READER CONFIG DATA | `READER_CONFIG_DATA` | yes |
+| 4 | EXPANSION REQUEST ID (17 00) | PERIPHERAL ID | `READER_CONFIG_INFO` / `_L3` | yes — the VMC's ID payload |
+| 5 | SETUP MAX/MIN PRICES (11 01) | ACK | fixed | yes — the price limits |
+| 6 | EXPANSION ENABLE OPTIONS (17 04) | ACK | fixed | yes — the feature bits |
+| 7 | READER ENABLE (14 01) | ACK | fixed | yes |
+| 8 | READER DISABLE (14 00) | ACK | fixed | yes |
+| 9 | READER CANCEL (14 02) | CANCELLED | `CAN` | yes |
+| 10 | POLL (12) | BEGIN SESSION | `SESSION_BEGIN` / `_L2` (1–35 bytes) | yes |
+| 11 | VEND REQUEST (13 00) | ACK | fixed | yes — price + item |
+| 12 | POLL (12) | VEND APPROVED | `VEND_APPROVED` | yes |
+| 13 | POLL (12) | VEND DENIED | `VEND_DENIED` | yes |
+| 14 | VEND SUCCESS (13 02) | ACK | fixed | yes |
+| 15 | VEND FAILURE (13 03) | ACK | fixed | yes |
+| 16 | VEND SESSION COMPLETE (13 04) | ACK | fixed | yes |
+| 17 | POLL (12) | END SESSION | `END_SESSION` | yes |
+| 18 | VEND CANCEL (13 01) | ACK | fixed | yes |
+| 19 | POLL (12) | SESSION CANCEL REQUEST | `SESSION_CANCEL` | yes |
+| 20 | REVALUE REQUEST (15 00) | REVALUE DENIED | `REVALUE_DENIED` | yes |
+| 21 | REVALUE LIMIT REQUEST (15 01) | REVALUE LIMIT AMOUNT | `REVALUE_LIMIT` | yes |
+| 22 | CASH SALE (13 05) | ACK | fixed | yes — price + item |
+| 23 | POLL (12), idle | ACK | fixed | yes |
+| 24 | EXPANSION, other subcommand | (varies) | — | yes |
+| 90 | other peripheral (outside 10–17) | (ignored) | — | yes |
+| 99 | unrecognized in current state | (none) | — | yes |
+| 0 | anything unmatched (fallback) | — | — | yes |
+
+Working with codes from Android:
+
+```kotlin
+HardwareLib.exchangeListener = { e ->
+    when (e.code) {
+        3  -> Log.i(TAG, "setup answered with ${HardwareLib.getReplyHex(3)}")
+        4  -> Log.i(TAG, "VMC identified itself: ${e.rxHex}")
+        11 -> Log.i(TAG, "vend request: ${e.message}")   // human sentence, ready to show
+    }
+}
+
+HardwareLib.getReplyHex(4)                 // current PERIPHERAL ID payload (level-aware)
+HardwareLib.setReplyHex(4, "09 01 ...")    // edit it by code — null = ok, else error text
+HardwareLib.setReplyHex(3, "01 02 19 78 01 02 E8 0B")   // READER CONFIG DATA
+HardwareLib.lastReceivedHex(4)             // the VMC's last EXPANSION REQUEST ID frame, saved
+HardwareLib.lastReceivedJson()             // {"4": "17 00 ...", "5": "11 01 ...", ...}
+HardwareLib.replyConfigName(10)            // "SESSION_BEGIN_L2" (at level 2/3)
+MdbCmd.fromCode(4)                         // the schema entry itself (names, template)
+```
+
+Each `MdbExchangeEvent` carries: `cmd`/`code`, `rxHex`, `txName`, `params` (codebook-ready:
+p[0]=rx, p[1]=tx, extras like price/item/level), `message` (the human sentence), `sessionId`
+(non-null from BEGIN SESSION to END SESSION), `publishRemote` (the remote-logging gate),
+`showOnScreen` (false for idle-poll noise), `timestampMs`.
+
+## HardwareLib listeners
+
+| Listener | Fires with | When |
+|---|---|---|
+| `stateListener` | `"INACTIVE_STATE" \| "DISABLED_STATE" \| "ENABLED_STATE" \| "VEND_STATE"` | On every state TRANSITION only (edge-triggered — never on heartbeats) |
+| `exchangeListener` | `MdbExchangeEvent` | Once per handled bus exchange, CMD-coded |
+| `logListener` | `(line, showOnScreen)` | Every human-readable line |
+| `statusListener` | `{"state": ..., "recentActivity": ...}` JSON | Every transition + 3 s heartbeat |
+| `controlListener` | `(tag, payload)` — tags `LOG`, `SETTINGS_JSON`, `CONFIG_JSON`, `VMC_STATUS` | Whenever the engine reports/announces |
+| `vendListener` | typed vend callbacks | See "Taking payments" below |
+
+All listeners run on the engine's offload thread, never the bus thread — a slow listener can
+never make a response miss the VMC's reply window, but return promptly anyway. Attach
+listeners BEFORE `HardwareLib.init(context)` — init publishes the first settings snapshot.
+
+`HardwareLib.handleCommand(text): Boolean` is the transport-agnostic remote-control entry:
+feed it whatever text arrives from MQTT/HTTP/BLE/adb; it consumes what it recognizes
+(open/close/vendApprove/cancelVend/setMdbLevel:…/setConfig JSON/…) and returns false
+otherwise.
+
+## Integration — the whole thing
+
+```kotlin
+// once, at startup (Application or first Activity):
+MqttLib.init(MqttConfig(topicPrefix = "cm30-mdb/hamdan-rabbah", deviceId = myDeviceId,
+                        brokerHost = "YOUR-SERVER", username = "rabbah", password = "…"))
+MqttLib.start()
+MdbMqttBridge.attach()                 // the glue (copy MdbMqttBridge.kt from app/)
+HardwareLib.init(applicationContext)
+HardwareLib.start()
+// Done. All MDB data flows to the dashboard; all remote commands work.
+```
+
+## RabbahLog — sending logs (the compact codebook envelope)
+
+```kotlin
+RabbahLog.init("vending-app", "2.13.9")          // once — names the emitter on every item
+
+RabbahLog.raw("payment gateway responded in 420ms")          // free text
+RabbahLog.rawError("gateway timeout after 3 retries")        // free text, severity=e
+RabbahLog.log(MdbLogEvent.MDB_VEND_REQUEST,                  // typed event
+              "13 00 01 F4 00 03", "ACK", "500", "3")
+```
+
+On the wire each call is one compact item on the `liveLog` topic — identical envelope to the
+production Rabbah Log Codebook (`t/s/m/a/v/k/i/d/p`, single-letter keys, positional params):
+
+```
+RABBAH_LOG:{"t":"1787743651002","s":"MDB","m":"13","a":"vending-app","v":"2.13.9",
+            "k":"i","i":"7c1f2a9b","d":1,"p":["13 00 01 F4 00 03","ACK","500","3"]}
+```
+
+The dashboard decodes codes back into sentences using the codebook the device itself serves
+(`getCodebook` → `CODEBOOK_JSON:{…}`), so decode tables can never drift from the emitting
+build. `RabbahLog.makeLogJson(...)` builds the envelope without sending;
+`RabbahLog.format(event, params)` renders the sentence locally.
+
+## RabbahMqtt — the generic MQTT API (no MDB required)
+
+The one-stop surface for an Android app that just wants to talk to the broker. Everything is
+queued (never blocks, buffers offline, silent no-op when MQTT is off), and every subscription
+re-establishes itself on reconnect.
+
+```kotlin
+// logs — ride the RABBAH_LOG envelope, render on the dashboard automatically:
+RabbahMqtt.sendLog("payment gateway responded in 420ms")
+RabbahMqtt.sendError("gateway timeout after 3 retries")
+
+// generic inbox — plain-text messages on the commands topic:
+val cmdSub = RabbahMqtt.onCommand { cmd ->
+    when (cmd) {
+        "rebootKiosk" -> { scheduleReboot(); true }   // true = consumed, chain stops
+        else -> false                                 // false = let other listeners look
+    }
+}
+RabbahMqtt.removeCommand(cmdSub)
+
+// any custom channel "<prefix>/<deviceId>/<suffix>", both directions, both formats:
+RabbahMqtt.sendJson("telemetry", JSONObject().put("battery", 87))
+RabbahMqtt.sendText("status", "READY")
+val s1 = RabbahMqtt.subscribeJson("inbox")   { json -> ... }   // non-JSON arrives as {"raw": "..."}
+val s2 = RabbahMqtt.subscribeText("control") { text -> ... }
+RabbahMqtt.unsubscribe(s1)
+```
+
+Handlers run on the MQTT reader thread — return quickly, never block, hop to your own thread
+for real work. Topics are always `<prefix>/<deviceId>/<suffix>`; callers never build one.
+
+## Broker auth (private mosquitto etc.)
+
+```kotlin
+MqttLib.init(MqttConfig(
+    topicPrefix = "cm30-mdb/hamdan-rabbah", deviceId = myDeviceId,
+    brokerHost = "YOUR-SERVER-IP", brokerPort = 1883,
+    username = "rabbah", password = "…"
+))
+```
+
+The `log-viewer.html` dashboard can point at the same broker via its **WebSocket** listener
+(mosquitto needs `listener 9001` + `protocol websockets`): open it once as
+`log-viewer.html?broker=ws://YOUR-SERVER:9001&user=rabbah&pass=…` — values persist in
+localStorage (query wins over stored). A browser cannot speak plain TCP 1883.
+
+`rabbahlog-sample-v1.3.apk` (in `dist/`) is the proof app: editable broker settings on screen,
+buttons for raw log / MDB example / telemetry JSON / burst, a live `queued/sent/dropped`
+status line, and an `inbox` subscription you can hit with `mosquitto_pub`.
+
+## Gradle setup
+
+Preferred: consume the modules directly (`implementation project(':hardware-lib')`,
+`project(':mqtt-lib')`) — see the demo `app/`.
+
+If consuming raw AARs instead: add `hardware-lib-7.0.0.aar`, `mqtt-lib-1.3.1.aar`, **and**
+`CM30-HardwareLibrary-1.0.9.aar` (hardware-lib needs it at runtime; AARs do not nest). If you
+skip MQTT entirely, `hardware-lib` + the CM30 AAR alone are enough.
+
+### Taking payments — the VendListener
+
+This is the payment-gateway hook. `onVendRequest` fires when the customer selects an item;
+run the gateway call on your own thread and answer with `approveVend()` / `cancelVend(...)` —
+the library keeps the VMC waiting correctly in the meantime (per-spec delayed response):
+
+```kotlin
+HardwareLib.vendListener = object : HardwareLib.VendListener {
+    override fun onVendRequest(amount: Double, minorUnits: Int, itemNumber: Int) {
+        // minorUnits = 350 (EXACT integer halalas - use for the gateway & money math)
+        // amount     = 3.5 (decimal, for display; format with "%.2f" to show 3.50)
+        // The library already applied the scale factor. Pay async:
+        scope.launch {
+            val approved = paymentGateway.charge(minorUnits)       // your gateway call
+            if (approved) HardwareLib.approveVend()
+            else HardwareLib.cancelVend()   // uses the standing mode set via setCancelMode(...)
+        }
+    }
+    override fun onVendSuccess(itemNumber: Int) { scope.launch { paymentGateway.capture() } }
+    override fun onVendFailure()                { scope.launch { paymentGateway.refund() } }
+    override fun onSessionEnded()               { /* per-session cleanup */ }
+}
+```
+
+Callbacks fire on a dedicated callback thread, never the bus thread. Exceptions you throw are
+caught and logged, never fatal. The price comes pre-scaled in two forms: `minorUnits: Int`
+(exact integer halalas/cents — use for the gateway and all money math) and `amount: Double`
+(decimal, for display — format with `%.2f`, never accumulate totals with it). `itemNumber`
+stays the raw 16-bit item code; all are `-1`/`-1.0` if the VMC omitted those bytes.
+
+### MDB control API
+
+Every control exists in BOTH forms — a public function for a standalone app, and the
+equivalent dashboard MQTT command (which arrives through the bridge as
+`handleCommand(...)`). Both call the same code, settings persist either way, and every change
+is reported back in `SETTINGS_JSON:` so a watching dashboard always shows the real values.
+
+| App function | Dashboard command | What it does |
+|---|---|---|
+| `HardwareLib.start()` / `stop()` | `open` / `close` | Open/close the MDB port + worker loop |
+| `HardwareLib.beginSession()` | `beginSession` | Start a session (the "card tap"; needed in manual mode) |
+| `HardwareLib.approveVend(): Boolean` | `vendApprove` | Approve the pending VEND REQUEST (false if none pending) |
+| `HardwareLib.setCancelMode(CancelResponse)` | `setCancelMode:sessionCancel` / `setCancelMode:vendDenied` | Set ONCE: the standing response for cancels + the VMC's own VEND CANCEL. Persisted. |
+| `HardwareLib.cancelVend(): Boolean` | `cancelVend` | The simple cancel — sends the standing response set above |
+| `HardwareLib.cancelVend(CancelResponse): Boolean` | `cancelVend:sessionCancel` / `cancelVend:vendDenied` | One-time override without touching the standing mode |
+| `HardwareLib.setAutoSession(Boolean)` / `isAutoSession` | `setSessionMode:auto` / `setSessionMode:manual` | true = sessions begin by themselves, false = manual |
+| `HardwareLib.setMdbLevel(1..3)` | `setMdbLevel:1\|2\|3` | MDB feature level (handshake + payloads) |
+| `HardwareLib.setMqttLogging(Boolean)` / `isMqttLoggingEnabled` | `setMqttLogging:on\|off` | Gate the remote log stream (`publishRemote` on events + the "LOG" control tag) — local listeners and the control plane keep working while muted |
+| `HardwareLib.setPollVisibility(Boolean)` | `setPollVisibility:on\|off` | Log-debug: show idle POLL/ACK |
+| `HardwareLib.setUnhandledVisibility(Boolean)` | `setUnhandledVisibility:on\|off` | Log-debug: show commands addressed to us we could not answer |
+| `HardwareLib.setPeripheralVisibility(Boolean)` | `setPeripheralVisibility:on\|off` | Log-debug: show bus traffic addressed to OTHER peripherals (coin changer, bill validator). Separate from unhandled. The dashboard also has a client-side "Cashless only" filter. |
+| `HardwareLib.handleCommand(text): Boolean` | — | Feed ANY transport's received text in; consumes what it recognizes |
+| `HardwareLib.vendListener / logListener / statusListener / stateListener / exchangeListener / controlListener` | — | The full listener surface (see table above) |
+| `HardwareLib.currentState: String` / `isSessionActive` / `sessionId` | — | Read state on demand: INACTIVE_STATE, DISABLED_STATE, ENABLED_STATE, VEND_STATE |
+| `HardwareLib.getReplyHex(code)` / `setReplyHex(code, hex)` / `lastReceivedHex(code)` / `lastReceivedJson()` / `replyConfigName(code)` | — | CMD-code hex access (see schema above) |
+| `HardwareLib.priceToAmount(raw)` / `priceToMinorUnits(raw)` | — | Standalone price converters using the live READER_CONFIG_DATA scale/decimals |
+
+### Configuring the hex payloads from Android code
+
+The same edits the dashboard's Config panel makes are available as functions — by name, or by
+CMD code via `setReplyHex(code, hex)`. Byte length is locked per payload (only values change)
+— EXCEPT the two Begin Session payloads, whose length is freely editable (1–35 bytes; some
+feature-level-2 machines only accept the short Level-1-style 3-byte form). Changes persist
+and are used on the very next send, no restart; an ack + fresh `CONFIG_JSON:` snapshot are
+published automatically so any watching dashboard stays in sync.
+
+```kotlin
+HardwareLib.configNames()                                        // all editable names
+HardwareLib.getConfigHex(HardwareLib.ConfigName.SESSION_BEGIN)   // -> "03 FF FF"
+HardwareLib.setConfigHex(HardwareLib.ConfigName.SESSION_BEGIN_L2, "03 FF FF")  // null = ok
+HardwareLib.resetConfig(HardwareLib.ConfigName.SESSION_BEGIN)    // back to library default
+HardwareLib.configSnapshotJson()                                 // everything, as JSON
+```
+
+| `HardwareLib.ConfigName.…` | Bytes | What it is |
+|---|---|---|
+| `READER_CONFIG_DATA` | 8 | SETUP response: level, currency, scale, decimals, timeout, options (level byte overwritten at runtime) |
+| `READER_CONFIG_INFO` | 30 | Peripheral ID (Level 2): manufacturer 3 + serial 12 + model 12 + sw version 2 |
+| `READER_CONFIG_INFO_L3` | 34 | Peripheral ID (Level 3): same + 4 optional-feature-bits bytes — bit 5 of the LAST byte = Always Idle |
+| `SESSION_BEGIN` | 1–35 (editable) | Begin Session (Level 1), default `03 FF FF` |
+| `SESSION_BEGIN_L2` | 1–35 (editable) | Begin Session (Level 2/3), default 10 bytes — set `03 FF FF` for machines that want the short form |
+| `REVALUE_LIMIT` | 3 | Revalue Limit Amount: code + limit hi/lo — sent as-is on REVALUE LIMIT REQUEST (15 01) |
+| `REVALUE_DENIED` | 1 | Reply to a REVALUE REQUEST (15 00) — default `0E`; this device never credits funds onto media |
+| `VEND_APPROVED` | 3 | code + price hi/lo (price overwritten at runtime) |
+| `JUST_RESET` / `CAN` / `VEND_DENIED` / `END_SESSION` / `SESSION_CANCEL` | 1 | single response codes |
+
+### Configs over MQTT (through the bridge)
+
+Everything about response payloads — parsing, validation, persistence, live hot-reload,
+acks — is `MdbConfigStore`'s job. Over MQTT, send JSON on the commands topic:
+
+```json
+{ "setConfig": { "SESSION_BEGIN": "03 FF FF", "READER_CONFIG_DATA": "01 02 19 78 01 02 E8 0B" } }
+{ "resetConfig": ["SESSION_BEGIN"] }
+{ "getConfig": true }
+```
+
+Per-name validation, per-name ack lines, and a full `CONFIG_JSON:` snapshot come back
+automatically. The legacy text form (`setConfig:NAME:hex`, `resetConfig:NAME`, `getConfig`)
+still works, so the existing `log-viewer.html` dashboard needs no changes. Locally:
+`MdbConfigStore.applyJson(json)`, `.get(name)`, `.set(name, hex)`, `.snapshotJson()`.
+
+Special byte worth knowing: **Always Idle** (Level 3) is bit 5 of the LAST byte (Z34) of
+`READER_CONFIG_INFO_L3` — set that byte to `20` to enable. There is deliberately no separate
+flag; the engine reads the declared wire bytes.
+
+## Wire protocol (device <-> dashboard)
+
+Unchanged by the split — the bridge reproduces it byte-identically:
+
+- Topics: `<prefix>/<deviceId>/liveLog` (out) and `<prefix>/<deviceId>/commands` (in);
+  suffixes configurable (`logTopicSuffix`/`commandTopicSuffix`/`statusTopicSuffix` for the
+  `devices/{deviceCode}/logs|cmd|status` backend contract).
+- Tagged messages out: `RABBAH_LOG:{…}` (compact log items), `CODEBOOK_JSON:{…}` (reply to
+  `getCodebook`), `VMC_STATUS:{...}` (3 s heartbeat + instant on state change),
+  `SETTINGS_JSON:{...}`, `CONFIG_JSON:{...}`, `PONG`; anything untagged is a plain log line.
+- Queue: bounded (default 1000), drop-oldest on overflow (`MqttLib.droppedMessages` counts).
+- The stack runs on the Rabbah mosquitto (mqtt://mosquitto:1883) with username/password auth;
+  the app reads broker credentials from local.properties via BuildConfig.
