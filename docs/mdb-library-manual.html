@@ -173,6 +173,28 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
     lifecycle, session/vend, every setting and every mqtt-lib call returns <code>Boolean</code>
     (true = done/queued, false = rejected or not applicable). Only <code>setConfigHex</code> /
     <code>setReplyHex</code> differ: null on success, else the error sentence.</p>
+
+    <h3>logListener vs exchangeListener &mdash; same event, two formats</h3>
+    <p>When the machine sends a frame and the library replies, BOTH listeners fire with the same
+    exchange &mdash; the difference is only the shape you receive it in:</p>
+    <pre class="code">VMC sends 11 00 ... -&gt; library replies READER CONFIG DATA
+        |
+        +- logListener gets ONE STRING (ready to show):
+        |     <span class="s">"SETUP CONFIG rx=11 00 03 10 tx=READER CONFIG DATA level=2"</span>
+        |
+        +- exchangeListener gets AN OBJECT (ready to use):
+              code = <span class="k">3</span>, rxHex = <span class="s">"11 00 03 10"</span>, txName = <span class="s">"READER CONFIG DATA"</span>, sessionId, ...</pre>
+    <p><strong><code>logListener</code> = text, for display</strong> &mdash; a TextView, Logcat, a
+    log file; you cannot easily ask "was this code 3?" without parsing the sentence.
+    <strong><code>exchangeListener</code> = data, for logic</strong> &mdash;
+    <code>if (e.code == 3) ...</code>, analytics, forwarding, saving hex; its
+    <code>e.message</code> is the identical sentence logListener receives. One extra scope
+    difference: logListener ALSO hears the engine's status lines
+    (<code>[remote] vend approved requested</code>, <code>open() failed...</code>, config acks),
+    while exchangeListener fires strictly for bus exchanges.</p>
+    <p>Rule of thumb: show text to a person &rarr; <code>logListener</code>; make a decision in
+    code &rarr; <code>exchangeListener</code>; both jobs in one app &rarr; attach both
+    (different slots, no conflict).</p>
     <p><strong>The CMD code schema.</strong> Every exchange carries one stable integer code
     (<code>MdbCmd</code>, append-only). Edit a reply by number with
     <code>setReplyHex(code, hex)</code> / read it with <code>getReplyHex(code)</code>; the last

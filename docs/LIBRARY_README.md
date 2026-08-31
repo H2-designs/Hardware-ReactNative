@@ -125,6 +125,32 @@ p[0]=rx, p[1]=tx, extras like price/item/level), `message` (the human sentence),
 | `controlListener` | `(tag, payload)` — tags `LOG`, `SETTINGS_JSON`, `CONFIG_JSON`, `VMC_STATUS` | Whenever the engine reports/announces |
 | `vendListener` | typed vend callbacks | See "Taking payments" below |
 
+### logListener vs exchangeListener — same event, two formats
+
+When the machine sends a frame and the library replies, BOTH listeners fire with the same
+exchange — the difference is only the shape you receive it in:
+
+```
+VMC sends 11 00 ... → library replies READER CONFIG DATA
+        │
+        ├─ logListener gets ONE STRING (ready to show):
+        │     "SETUP CONFIG rx=11 00 03 10 tx=READER CONFIG DATA level=2"
+        │
+        └─ exchangeListener gets AN OBJECT (ready to use):
+              code = 3, rxHex = "11 00 03 10", txName = "READER CONFIG DATA", sessionId, ...
+```
+
+- **`logListener` = text, for display** — a TextView, Logcat, a log file. You can't easily ask
+  "was this code 3?" without parsing the sentence.
+- **`exchangeListener` = data, for logic** — `if (e.code == 3) ...`, analytics, forwarding,
+  saving hex. Its `e.message` is the identical sentence logListener receives.
+- One extra scope difference: `logListener` ALSO hears the engine's status lines
+  (`[remote] vend approved requested`, `open() failed…`, config acks); `exchangeListener`
+  fires strictly for bus exchanges.
+
+Rule of thumb: show text to a person → `logListener`; make a decision in code →
+`exchangeListener`; both jobs in one app → attach both (different slots, no conflict).
+
 All listeners run on the engine's offload thread, never the bus thread — a slow listener can
 never make a response miss the VMC's reply window, but return promptly anyway. Attach
 listeners BEFORE `HardwareLib.init(context)` — init publishes the first settings snapshot.
