@@ -128,14 +128,14 @@
     The complete developer manual for <code class="cmd">hardware-lib</code> and
     <code class="cmd">mqtt-lib</code>: every function with a working example, every dashboard
     command, and what actually happens inside when you call each one. Current as of
-    hardware-lib&nbsp;7.1.0 / mqtt-lib&nbsp;2.0.0.
+    hardware-lib&nbsp;7.2.0 / mqtt-lib&nbsp;2.0.0.
   </p>
 
 
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.1.0</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-7.2.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -145,10 +145,10 @@
     format <em>byte-identically</em> &mdash; the dashboard needs zero changes:</p>
     <pre class="code"><span class="c">// the whole bridge - attach BEFORE HardwareLib.init():</span>
 MqttLib.addCommandListener { HardwareLib.handleCommand(it) }        <span class="c">// commands in</span>
-HardwareLib.controlListener = { tag, payload -&gt;                     <span class="c">// control plane out</span>
+HardwareLib.addControlListener { tag, payload -&gt;                     <span class="c">// control plane out</span>
     <span class="k">if</span> (tag == <span class="s">"LOG"</span>) MqttLib.enqueue(payload) <span class="k">else</span> MqttLib.enqueue(<span class="s">"$tag:$payload"</span>)
 }
-HardwareLib.exchangeListener = { e -&gt;                               <span class="c">// exchanges out</span>
+HardwareLib.addExchangeListener { e -&gt;                             <span class="c">// exchanges out</span>
     <span class="k">if</span> (e.publishRemote) {
         RabbahLog.sessionId = e.sessionId
         RabbahLog.log(MdbLogEvent.valueOf(e.logEventName), e.params)
@@ -195,6 +195,27 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
     <p>Rule of thumb: show text to a person &rarr; <code>logListener</code>; make a decision in
     code &rarr; <code>exchangeListener</code>; both jobs in one app &rarr; attach both
     (different slots, no conflict).</p>
+
+    <h3>Multiple consumers &mdash; add/remove listeners (7.2.0)</h3>
+    <p>Each <code>HardwareLib.xListener = { ... }</code> var is a SINGLE slot: a second
+    assignment silently replaces the first &mdash; which used to bite when your own code and
+    <code>MdbMqttBridge</code> both wanted the exchange feed. Since 7.2.0 the bridge registers
+    through the multi-listener API, so the var slots are always free for your code, and any
+    number of extra consumers can register:</p>
+    <pre class="code"><span class="k">val</span> mine: (MdbExchangeEvent) -&gt; Unit = { e -&gt; <span class="k">if</span> (e.code == <span class="s">11</span>) charge(e.params[<span class="s">2</span>].toInt()) }
+HardwareLib.addExchangeListener(mine)      <span class="c">// alongside the bridge, alongside the var slot</span>
+HardwareLib.removeExchangeListener(mine)   <span class="c">// true when it was registered</span>
+
+<span class="c">// same pattern for the other feeds:</span>
+HardwareLib.addLogListener / removeLogListener
+HardwareLib.addStateListener / removeStateListener
+HardwareLib.addControlListener / removeControlListener</pre>
+    <p><strong>If exchangeListener seems to receive nothing, check in this order:</strong>
+    (1) hardware-lib &lt; 7.2.0 and the bridge overwrote your assignment &mdash; upgrade, or use
+    <code>addExchangeListener</code>; (2) no real VMC is connected &mdash; exchange events fire
+    only for actual bus frames (a dead port shows as <code>open() failed...</code> through
+    logListener); (3) the listener was attached after the exchanges happened &mdash; there is no
+    replay, only live events from the moment of registration.</p>
     <p><strong>The CMD code schema.</strong> Every exchange carries one stable integer code
     (<code>MdbCmd</code>, append-only). Edit a reply by number with
     <code>setReplyHex(code, hex)</code> / read it with <code>getReplyHex(code)</code>; the last
@@ -240,7 +261,7 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
     <p>Add the AARs (or the Gradle modules) and initialize once at app startup:</p>
     <pre class="code"><span class="c">// build.gradle (raw AARs; skip if using the Gradle modules directly)</span>
 implementation files(<span class="s">'libs/mqtt-lib-2.0.0.aar'</span>)
-implementation files(<span class="s">'libs/hardware-lib-7.1.0.aar'</span>)
+implementation files(<span class="s">'libs/hardware-lib-7.2.0.aar'</span>)
 implementation files(<span class="s">'libs/CM30-HardwareLibrary-1.0.9.aar'</span>)  <span class="c">// hardware-lib's hardware runtime</span></pre>
 
     <pre class="code"><span class="c">// In your Application class or first Activity - the whole startup:</span>
@@ -697,6 +718,6 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
 </main>
 
 <footer>
-  CM30 MDB Slave project — developer manual. hardware-lib 7.1.0 · mqtt-lib 2.0.0 · demo app v2.13.10
+  CM30 MDB Slave project — developer manual. hardware-lib 7.2.0 · mqtt-lib 2.0.0 · demo app v2.13.11
   (build 54). Companion docs: the architecture reference and the interactive vend simulator.
 </footer>

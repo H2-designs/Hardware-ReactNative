@@ -70,40 +70,55 @@ class MdbRnModule(private val reactContext: ReactApplicationContext) :
 
     // ------------------------------------ MDB lifecycle ------------------------------------
 
+    /** Guards double-registration when JS calls initMdb() more than once (e.g. fast refresh). */
+    @Volatile private var mdbBridged = false
+
+    private val commandForwarder: (String) -> Boolean = { MdbLib.handleCommand(it) }
+
+    private val controlForwarder: (String, String) -> Unit = { tag, payload ->
+        if (tag == "LOG") MqttLib.enqueue(payload) else MqttLib.enqueue("$tag:$payload")
+    }
+
+    private val exchangeForwarder: (com.rabbah.mdb.MdbExchangeEvent) -> Unit = { e ->
+        if (e.publishRemote) {
+            RabbahLog.sessionId = e.sessionId
+            val event = try {
+                MdbLogEvent.valueOf(e.logEventName)
+            } catch (_: IllegalArgumentException) {
+                null
+            }
+            if (event != null) RabbahLog.log(event, e.params) else RabbahLog.raw(e.message)
+        }
+        // Structured feed for JS as well - one event per exchange, CMD-coded.
+        val map = Arguments.createMap()
+        map.putInt("code", e.code)
+        map.putString("name", e.cmd.name)
+        map.putString("rxHex", e.rxHex)
+        map.putString("txName", e.txName)
+        map.putString("message", e.message)
+        e.sessionId?.let { map.putString("sessionId", it) }
+        emit("MdbExchange", map)
+    }
+
+    private val stateForwarder: (String) -> Unit = { state ->
+        val map = Arguments.createMap()
+        map.putString("state", state)
+        emit("MdbStateChanged", map)
+    }
+
     @ReactMethod
     fun initMdb() {
-        // The MQTT bridge: since hardware-lib 7.0.0 the MDB engine contains no networking -
-        // these three wires put its events on the MQTT queue in the exact format the dashboard
+        // The MQTT bridge: since hardware-lib 7.x the MDB engine contains no networking -
+        // these wires put its events on the MQTT queue in the exact format the dashboard
         // already speaks, and feed dashboard commands back in. Registered BEFORE init() so the
-        // first settings snapshot reaches the wire too.
-        MqttLib.addCommandListener { MdbLib.handleCommand(it) }
-        MdbLib.controlListener = { tag, payload ->
-            if (tag == "LOG") MqttLib.enqueue(payload) else MqttLib.enqueue("$tag:$payload")
-        }
-        MdbLib.exchangeListener = { e ->
-            if (e.publishRemote) {
-                RabbahLog.sessionId = e.sessionId
-                val event = try {
-                    MdbLogEvent.valueOf(e.logEventName)
-                } catch (_: IllegalArgumentException) {
-                    null
-                }
-                if (event != null) RabbahLog.log(event, e.params) else RabbahLog.raw(e.message)
-            }
-            // Structured feed for JS as well - one event per exchange, CMD-coded.
-            val map = Arguments.createMap()
-            map.putInt("code", e.code)
-            map.putString("name", e.cmd.name)
-            map.putString("rxHex", e.rxHex)
-            map.putString("txName", e.txName)
-            map.putString("message", e.message)
-            e.sessionId?.let { map.putString("sessionId", it) }
-            emit("MdbExchange", map)
-        }
-        MdbLib.stateListener = { state ->
-            val map = Arguments.createMap()
-            map.putString("state", state)
-            emit("MdbStateChanged", map)
+        // first settings snapshot reaches the wire too. Uses addXListener (multi-listener)
+        // so the single-slot convenience vars stay free for any other native code.
+        if (!mdbBridged) {
+            mdbBridged = true
+            MqttLib.addCommandListener(commandForwarder)
+            MdbLib.addControlListener(controlForwarder)
+            MdbLib.addExchangeListener(exchangeForwarder)
+            MdbLib.addStateListener(stateForwarder)
         }
 
         MdbLib.init(reactContext.applicationContext)

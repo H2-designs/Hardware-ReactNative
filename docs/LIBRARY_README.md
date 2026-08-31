@@ -4,7 +4,7 @@ Two fully decoupled Android libraries extracted from the proven MDB Slave app:
 
 | Artifact | What it is |
 |---|---|
-| `hardware-lib-7.1.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
+| `hardware-lib-7.2.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
 | `mqtt-lib-2.0.0.aar` | MQTT 3.1.1 transport (queue + publisher thread + auto-reconnect, broker **username/password** auth, retained presence/LWT, **connection-state listener**) **plus the Rabbah compact-log layer**: `RabbahLog`, the unified MDB/INFO codebooks, and `RabbahMqtt` (send/receive logs, text or JSON on any topic — zero MDB involvement). |
 | `CM30-HardwareLibrary-1.0.9.aar` | The CM30 vendor serial driver (hardware-lib needs it at runtime; AARs do not nest). |
 
@@ -32,11 +32,11 @@ Its three wires keep the MQTT format **byte-identical** to before the split, so 
 dashboard needs zero changes:
 
 ```kotlin
-MqttLib.addCommandListener { HardwareLib.handleCommand(it) }          // commands in
-HardwareLib.controlListener = { tag, payload ->                        // control plane out
+MqttLib.addCommandListener { HardwareLib.handleCommand(it) }           // commands in
+HardwareLib.addControlListener { tag, payload ->                        // control plane out
     if (tag == "LOG") MqttLib.enqueue(payload) else MqttLib.enqueue("$tag:$payload")
 }
-HardwareLib.exchangeListener = { e ->                                  // exchanges out
+HardwareLib.addExchangeListener { e ->                                  // exchanges out
     if (e.publishRemote) {
         RabbahLog.sessionId = e.sessionId
         RabbahLog.log(MdbLogEvent.valueOf(e.logEventName), e.params)
@@ -44,13 +44,17 @@ HardwareLib.exchangeListener = { e ->                                  // exchan
 }
 ```
 
+Since 7.2.0 the bridge registers via `addControlListener`/`addExchangeListener`
+(multi-listener), so the single-slot vars (`HardwareLib.exchangeListener` etc.) stay free for
+your own code — see "Multiple consumers" below.
+
 Want HTTP or BLE instead of MQTT? Write your own 30-line bridge against the same three hooks.
 Want no network at all? Attach no bridge — the engine, vend flow, and all local listeners work
 fully offline.
 
 > Migration note: the Kotlin package is still `com.rabbah.mdb` and a deprecated
 > `typealias MdbLib = HardwareLib` keeps old code compiling — the only hard change is the
-> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.1.0.aar`) and that MQTT
+> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.2.0.aar`) and that MQTT
 > forwarding now needs the bridge attached.
 
 ## The CMD code schema
@@ -150,6 +154,35 @@ VMC sends 11 00 ... → library replies READER CONFIG DATA
 
 Rule of thumb: show text to a person → `logListener`; make a decision in code →
 `exchangeListener`; both jobs in one app → attach both (different slots, no conflict).
+
+### Multiple consumers — add/remove listeners (7.2.0)
+
+Each `HardwareLib.xListener = { ... }` var is a SINGLE slot: a second assignment silently
+replaces the first. That bites the moment two parties want the same feed — most commonly your
+own code plus `MdbMqttBridge` (which forwards exchanges to the dashboard). Since 7.2.0 the
+bridge registers through the multi-listener API instead, so **the var slots are always free
+for your code**, and any number of extra consumers can register:
+
+```kotlin
+val mine: (MdbExchangeEvent) -> Unit = { e -> if (e.code == 11) charge(e.params[2].toInt()) }
+HardwareLib.addExchangeListener(mine)      // alongside the bridge, alongside the var slot
+HardwareLib.removeExchangeListener(mine)   // true when it was registered
+
+// same pattern for the other feeds:
+HardwareLib.addLogListener { line, show -> ... }      / removeLogListener(...)
+HardwareLib.addStateListener { state -> ... }         / removeStateListener(...)
+HardwareLib.addControlListener { tag, json -> ... }   / removeControlListener(...)
+```
+
+All registered listeners AND the var slot receive every event; a listener that throws is
+caught and skipped, never fatal to the others.
+
+**If exchangeListener seems to receive nothing, check in this order:** (1) you are on
+hardware-lib < 7.2.0 and the bridge overwrote your assignment — upgrade, or use
+`addExchangeListener`; (2) no real VMC is connected — exchange events fire only for actual
+bus frames (the engine reports `open() failed…` through logListener when the port is dead);
+(3) you assigned the listener after expecting past events — there is no replay, only live
+exchanges from the moment of registration.
 
 All listeners run on the engine's offload thread, never the bus thread — a slow listener can
 never make a response miss the VMC's reply window, but return promptly anyway. Attach
@@ -285,7 +318,7 @@ status line, and an `inbox` subscription you can hit with `mosquitto_pub`.
 Preferred: consume the modules directly (`implementation project(':hardware-lib')`,
 `project(':mqtt-lib')`) — see the demo `app/`.
 
-If consuming raw AARs instead: add `hardware-lib-7.1.0.aar`, `mqtt-lib-2.0.0.aar`, **and**
+If consuming raw AARs instead: add `hardware-lib-7.2.0.aar`, `mqtt-lib-2.0.0.aar`, **and**
 `CM30-HardwareLibrary-1.0.9.aar` (hardware-lib needs it at runtime; AARs do not nest). If you
 skip MQTT entirely, `hardware-lib` + the CM30 AAR alone are enough.
 
