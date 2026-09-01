@@ -4,7 +4,7 @@ Two fully decoupled Android libraries extracted from the proven MDB Slave app:
 
 | Artifact | What it is |
 |---|---|
-| `hardware-lib-7.4.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
+| `hardware-lib-7.5.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
 | `mqtt-lib-2.0.0.aar` | MQTT 3.1.1 transport (queue + publisher thread + auto-reconnect, broker **username/password** auth, retained presence/LWT, **connection-state listener**) **plus the Rabbah compact-log layer**: `RabbahLog`, the unified MDB/INFO codebooks, and `RabbahMqtt` (send/receive logs, text or JSON on any topic — zero MDB involvement). |
 | `CM30-HardwareLibrary-1.0.9.aar` | The CM30 vendor serial driver (hardware-lib needs it at runtime; AARs do not nest). |
 
@@ -54,7 +54,7 @@ fully offline.
 
 > Migration note: the Kotlin package is still `com.rabbah.mdb` and a deprecated
 > `typealias MdbLib = HardwareLib` keeps old code compiling — the only hard change is the
-> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.4.0.aar`) and that MQTT
+> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.5.0.aar`) and that MQTT
 > forwarding now needs the bridge attached.
 
 ## The CMD code schema
@@ -224,6 +224,40 @@ HardwareLib.start()
 // Done. All MDB data flows to the dashboard; all remote commands work.
 ```
 
+## Pulse output — PulseLib (7.5.0)
+
+Pulse driving over the CM30's digital IO (`android.hardware.digital.DigitalIO`), with the
+timing guarantees the machine demands — a stretched pulse width is a rejected pulse:
+
+```kotlin
+// Polarity, from the backend/dashboard boolean:
+PulseLib.initPulse(true)    // HIGH-pulse mode: pin idles LOW now, pulses go HIGH
+PulseLib.initPulse(false)   // LOW-pulse mode:  pin idles HIGH now, pulses go LOW
+
+// Send a train and get the REAL result (true = every pulse physically sent):
+val ok = PulseLib.sendPulse(pulseWidthMs = 50, pulsePeriodMs = 100, count = 3)
+```
+
+- **Dedicated worker.** All pin work runs on one `PulseWorker` thread at
+  `THREAD_PRIORITY_URGENT_AUDIO` that does nothing but pulse — no logging, no listeners, no
+  allocation inside the train. Waits are deadline-based sleep-then-spin (sleep the bulk, spin
+  the last ~2 ms), so widths never stretch and period error never accumulates.
+- **`sendPulse` blocks until the train finishes** (~ period × count) and returns true only if
+  every pulse went out — call it from a coroutine/background thread, never the UI thread. The
+  worker's priority does the timing; your thread just waits for the answer.
+- **`initPulse` drives the idle level immediately** and can be called again whenever the
+  backend changes the setting. `sendPulse` refuses to run before `initPulse` (wrong idle
+  level = wrong pulses). Read state via `PulseLib.isInitialized` / `isHighPulse` /
+  `pendingTrains`.
+- **Dashboard/backend commands** (via `handleCommand`, so they work over MQTT with no extra
+  wiring): `initPulse:true`, `initPulse:false`, `sendPulse:50,100,3` (width,period,count —
+  remote trains run detached so the MQTT reader never stalls). Results arrive as
+  `[pulse] sent 3 pulse(s) width=50ms period=100ms mode=HIGH` log lines.
+- **`PulseLib.vendorPulse(p1,p2,p3,p4)`** is a raw passthrough to the vendor's own native
+  `digital_out_pulse` for experiments — the vendor shipped no parameter names (known
+  constants: `PULSE_DIR_POSITIVE=0`, `PULSE_DIR_NEGATIVE=1`).
+- No CM30 runtime (emulator) → reported `[pulse] ... failed` lines and `false`, never a crash.
+
 ## RabbahLog — sending logs (the compact codebook envelope)
 
 ```kotlin
@@ -327,7 +361,7 @@ status line, and an `inbox` subscription you can hit with `mosquitto_pub`.
 Preferred: consume the modules directly (`implementation project(':hardware-lib')`,
 `project(':mqtt-lib')`) — see the demo `app/`.
 
-If consuming raw AARs instead: add `hardware-lib-7.4.0.aar`, `mqtt-lib-2.0.0.aar`, **and**
+If consuming raw AARs instead: add `hardware-lib-7.5.0.aar`, `mqtt-lib-2.0.0.aar`, **and**
 `CM30-HardwareLibrary-1.0.9.aar` (hardware-lib needs it at runtime; AARs do not nest). If you
 skip MQTT entirely, `hardware-lib` + the CM30 AAR alone are enough.
 

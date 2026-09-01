@@ -128,14 +128,14 @@
     The complete developer manual for <code class="cmd">hardware-lib</code> and
     <code class="cmd">mqtt-lib</code>: every function with a working example, every dashboard
     command, and what actually happens inside when you call each one. Current as of
-    hardware-lib&nbsp;7.4.0 / mqtt-lib&nbsp;2.0.0.
+    hardware-lib&nbsp;7.5.0 / mqtt-lib&nbsp;2.0.0.
   </p>
 
 
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.4.0</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-7.5.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -269,7 +269,7 @@ HardwareLib.addControlListener / removeControlListener</pre>
     <p>Add the AARs (or the Gradle modules) and initialize once at app startup:</p>
     <pre class="code"><span class="c">// build.gradle (raw AARs; skip if using the Gradle modules directly)</span>
 implementation files(<span class="s">'libs/mqtt-lib-2.0.0.aar'</span>)
-implementation files(<span class="s">'libs/hardware-lib-7.4.0.aar'</span>)
+implementation files(<span class="s">'libs/hardware-lib-7.5.0.aar'</span>)
 implementation files(<span class="s">'libs/CM30-HardwareLibrary-1.0.9.aar'</span>)  <span class="c">// hardware-lib's hardware runtime</span></pre>
 
     <pre class="code"><span class="c">// In your Application class or first Activity - the whole startup:</span>
@@ -583,6 +583,33 @@ HardwareLib.setConfigHex(HardwareLib.ConfigName.READER_CONFIG_INFO_L3,
     MDB CHK byte (8-bit sum) on every send automatically.</p>
   </section>
 
+  
+  <!-- ============================================================ -->
+  <section id="pulse">
+    <h2><span class="eyebrow">NEW &mdash; 7.5.0</span>Pulse output &mdash; PulseLib</h2>
+    <p>Pulse driving over the CM30's digital IO (<code>android.hardware.digital.DigitalIO</code>).
+    A stretched pulse width is a rejected pulse, so ALL pin work runs on one dedicated
+    <code>PulseWorker</code> thread at URGENT_AUDIO priority that does nothing but pulse; waits
+    are deadline-based sleep-then-spin, so widths never stretch and period error never
+    accumulates across a train.</p>
+    <pre class="code"><span class="c">// polarity, from the backend/dashboard boolean:</span>
+PulseLib.initPulse(<span class="k">true</span>)    <span class="c">// HIGH-pulse mode: pin idles LOW now, pulses go HIGH</span>
+PulseLib.initPulse(<span class="k">false</span>)   <span class="c">// LOW-pulse mode:  pin idles HIGH now, pulses go LOW</span>
+
+<span class="c">// send a train and get the REAL result (true = every pulse physically sent):</span>
+<span class="k">val</span> ok = PulseLib.sendPulse(pulseWidthMs = <span class="s">50</span>, pulsePeriodMs = <span class="s">100</span>, count = <span class="s">3</span>)</pre>
+    <p><code>sendPulse</code> BLOCKS until the train finishes (about period x count) and returns
+    true only when every pulse was written - call it from a coroutine, never the UI thread.
+    <code>initPulse</code> drives the idle level immediately and may be called again whenever the
+    backend changes the setting; <code>sendPulse</code> refuses to run before it. State:
+    <code>isInitialized</code> / <code>isHighPulse</code> / <code>pendingTrains</code>.
+    Dashboard commands: <code>initPulse:true|false</code> and <code>sendPulse:50,100,3</code>
+    (width,period,count - remote trains run detached, results arrive as
+    <code>[pulse] sent ...</code> log lines). <code>vendorPulse(p1,p2,p3,p4)</code> is a raw
+    passthrough to the vendor's native <code>digital_out_pulse</code> for experiments. Without
+    the CM30 runtime everything degrades to reported failures, never a crash.</p>
+  </section>
+
   <!-- ============================================================ -->
   <section id="mqtt">
     <h2><span class="eyebrow">08</span>MQTT for your own app - RabbahMqtt &amp; RabbahLog</h2>
@@ -726,6 +753,6 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
 </main>
 
 <footer>
-  CM30 MDB Slave project — developer manual. hardware-lib 7.4.0 · mqtt-lib 2.0.0 · demo app v2.13.13
+  CM30 MDB Slave project — developer manual. hardware-lib 7.5.0 · mqtt-lib 2.0.0 · demo app v2.13.14
   (build 54). Companion docs: the architecture reference and the interactive vend simulator.
 </footer>
