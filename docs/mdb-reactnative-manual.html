@@ -161,7 +161,8 @@
   <pre><code>import Mdb from 'react-native-mdb';
 
 const deviceId = await Mdb.getSuggestedDeviceId(); // last 6 of ANDROID_ID, uppercased
-Mdb.initMqtt('cm30-mdb/hamdan-rabbah', deviceId);  // OPTIONAL - see below
+Mdb.initMqtt('cm30-mdb/hamdan-rabbah', deviceId,     // OPTIONAL - see below
+            { host: 'uat-api.rabbah.sa', username: 'rabbah', password: '...' });
 Mdb.startMqtt();
 Mdb.initMdb();
 Mdb.startMdb();</code></pre>
@@ -219,7 +220,7 @@ const subs = [
   <h3>MQTT <span class="pill opt">optional</span></h3>
   <div class="tablewrap"><table>
     <tr><th>Function</th><th>What it does</th></tr>
-    <tr><td><code>initMqtt(prefix, deviceId)</code></td><td>Configure the broker link. Topics become <code>&lt;prefix&gt;/&lt;deviceId&gt;/liveLog</code> and <code>.../commands</code>.</td></tr>
+    <tr><td><code>initMqtt(prefix, deviceId, options?)</code></td><td>Configure the broker link. Topics become <code>&lt;prefix&gt;/&lt;deviceId&gt;/liveLog</code> and <code>.../commands</code>. Optional <code>options</code> = <code>{ host, port, username, password }</code> for a private authenticated broker (default host <code>mosquitto:1883</code>, no auth).</td></tr>
     <tr><td><code>startMqtt()</code> / <code>stopMqtt()</code></td><td>Open / close the connection (auto-reconnects while started).</td></tr>
     <tr><td><code>mqttEnqueue(line)</code></td><td>Push your own log line onto the shared outbound queue. No-op if MQTT was never initialized.</td></tr>
     <tr><td><code>isMqttConnected()</code></td><td>Resolves <code>true</code> while the socket is live.</td></tr>

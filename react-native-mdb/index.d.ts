@@ -33,7 +33,11 @@ export const ConfigName: {
 };
 
 declare const Mdb: {
-  initMqtt(topicPrefix: string, deviceId: string): void;
+  initMqtt(
+    topicPrefix: string,
+    deviceId: string,
+    options?: { host?: string; port?: number; username?: string; password?: string }
+  ): void;
   startMqtt(): Promise<boolean>;
   stopMqtt(): Promise<boolean>;
   mqttEnqueue(line: string): Promise<boolean>;

@@ -49,13 +49,40 @@ class MdbRnModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun initMqtt(topicPrefix: String, deviceId: String) {
-        MqttLib.init(MqttConfig(topicPrefix = topicPrefix, deviceId = deviceId))
+        initMqttInternal(MqttConfig(topicPrefix = topicPrefix, deviceId = deviceId))
+    }
+
+    /** Full broker config from JS: host/port plus optional username/password ("" = none).
+     * The JS wrapper calls this when an options object is passed to Mdb.initMqtt(). */
+    @ReactMethod
+    fun initMqttEx(
+        topicPrefix: String, deviceId: String,
+        host: String, port: Int, username: String, password: String
+    ) {
+        initMqttInternal(
+            MqttConfig(
+                topicPrefix = topicPrefix, deviceId = deviceId,
+                brokerHost = host, brokerPort = port,
+                username = username.ifEmpty { null },
+                password = password.ifEmpty { null }
+            )
+        )
+    }
+
+    @Volatile private var mqttListenerAdded = false
+
+    private fun initMqttInternal(config: MqttConfig) {
+        MqttLib.init(config)
         // Connection visibility for JS: fires once immediately with the current state, then on
-        // every change (edge-triggered) - no polling needed on the JS side.
-        MqttLib.addConnectionListener { connected ->
-            val map = Arguments.createMap()
-            map.putBoolean("connected", connected)
-            emit("MqttConnectionChanged", map)
+        // every change (edge-triggered) - no polling needed on the JS side. Guarded so repeated
+        // init calls (fast refresh, reconfiguration) never register twice.
+        if (!mqttListenerAdded) {
+            mqttListenerAdded = true
+            MqttLib.addConnectionListener { connected ->
+                val map = Arguments.createMap()
+                map.putBoolean("connected", connected)
+                emit("MqttConnectionChanged", map)
+            }
         }
     }
 

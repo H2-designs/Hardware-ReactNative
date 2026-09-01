@@ -50,7 +50,14 @@ export const ConfigName = {
 
 const Mdb = {
   // ---- MQTT (optional: skip entirely and MDB runs offline) ----
-  initMqtt: (topicPrefix, deviceId) => MdbRn.initMqtt(topicPrefix, deviceId),
+  /** options (all optional): { host, port, username, password } - e.g.
+   * Mdb.initMqtt('cm30-mdb/hamdan-rabbah', id, { host: 'uat-api.rabbah.sa', username: 'rabbah', password: '...' }) */
+  initMqtt: (topicPrefix, deviceId, options) =>
+    options
+      ? MdbRn.initMqttEx(topicPrefix, deviceId,
+          options.host ?? 'mosquitto', options.port ?? 1883,
+          options.username ?? '', options.password ?? '')
+      : MdbRn.initMqtt(topicPrefix, deviceId),
   startMqtt: () => MdbRn.startMqtt(),
   stopMqtt: () => MdbRn.stopMqtt(),
   /** Push your own log line onto the shared outbound queue (no-op without initMqtt). */
