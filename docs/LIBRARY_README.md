@@ -318,7 +318,7 @@ The `log-viewer.html` dashboard can point at the same broker via its **WebSocket
 `log-viewer.html?broker=ws://YOUR-SERVER:9001&user=rabbah&pass=…` — values persist in
 localStorage (query wins over stored). A browser cannot speak plain TCP 1883.
 
-`rabbahlog-sample-v1.3.apk` (in `dist/`) is the proof app: editable broker settings on screen,
+`rabbahlog-sample-v1.4.apk` (in `dist/`) is the proof app: editable broker settings on screen,
 buttons for raw log / MDB example / telemetry JSON / burst, a live `queued/sent/dropped`
 status line, and an `inbox` subscription you can hit with `mosquitto_pub`.
 
