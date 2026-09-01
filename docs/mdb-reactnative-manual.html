@@ -146,7 +146,7 @@
   </p>
   <ul>
     <li><code>minSdkVersion = 30</code> &mdash; the CM30 terminal runs Android 11 and the AARs are built for it.</li>
-    <li>Nothing else. The three AARs (<code>hardware-lib-7.5.0</code>, <code>mqtt-lib-2.0.0</code>,
+    <li>Nothing else. The three AARs (<code>hardware-lib-7.6.0</code>, <code>mqtt-lib-2.0.0</code>,
         <code>CM30-HardwareLibrary-1.0.9</code>) are bundled inside the package's <code>android/libs</code>.</li>
   </ul>
   <div class="callout warn">
@@ -285,10 +285,10 @@ const subs = [
     <tr><td><span class="pill event">onLog</span></td><td><code>{ line, showOnScreen }</code></td><td>Every engine log line. Never render <code>showOnScreen: false</code> lines into a growing list.</td></tr>
     <tr><td><span class="pill event">onStatus</span></td><td><code>{ json }</code></td><td>VMC status &mdash; instantly on every state change, plus a recentActivity flip (event-driven, no periodic heartbeat).</td></tr>
     <tr><td><span class="pill event">onRemoteCommand</span></td><td><code>{ command }</code></td><td>A dashboard command the MDB engine did not recognize &mdash; your app's own custom commands arrive here.</td></tr>
-    <tr><td><span class="pill event">MdbStateChanged</span></td><td><code>{ state }</code></td><td>New in hardware-lib 7.5.0 (raw DeviceEventEmitter name). Edge-triggered on every transition: INACTIVE_STATE / DISABLED_STATE / ENABLED_STATE / VEND_STATE &mdash; never fires on heartbeats.</td></tr>
-    <tr><td><span class="pill event">MdbExchange</span></td><td><code>{ code, name, rxHex, txName, message, sessionId? }</code></td><td>New in hardware-lib 7.5.0 (raw DeviceEventEmitter name). One per bus exchange, with its stable integer CMD code (111&nbsp;=&nbsp;RESET&rarr;ACK, 112&nbsp;=&nbsp;POLL&rarr;JUST&nbsp;RESET, 113&nbsp;=&nbsp;SETUP&rarr;READER&nbsp;CONFIG, 114&nbsp;=&nbsp;EXPANSION&rarr;PERIPHERAL&nbsp;ID, ... full table in the Library Manual).</td></tr>
+    <tr><td><span class="pill event">MdbStateChanged</span></td><td><code>{ state }</code></td><td>New in hardware-lib 7.6.0 (raw DeviceEventEmitter name). Edge-triggered on every transition: INACTIVE_STATE / DISABLED_STATE / ENABLED_STATE / VEND_STATE &mdash; never fires on heartbeats.</td></tr>
+    <tr><td><span class="pill event">MdbExchange</span></td><td><code>{ code, name, rxHex, txName, message, sessionId? }</code></td><td>New in hardware-lib 7.6.0 (raw DeviceEventEmitter name). One per bus exchange, with its stable integer CMD code (111&nbsp;=&nbsp;RESET&rarr;ACK, 112&nbsp;=&nbsp;POLL&rarr;JUST&nbsp;RESET, 113&nbsp;=&nbsp;SETUP&rarr;READER&nbsp;CONFIG, 114&nbsp;=&nbsp;EXPANSION&rarr;PERIPHERAL&nbsp;ID, ... full table in the Library Manual).</td></tr>
   </table></div>
-  <p><strong>Since hardware-lib 7.5.0</strong> the Kotlin engine ships no networking; the MQTT glue
+  <p><strong>Since hardware-lib 7.6.0</strong> the Kotlin engine ships no networking; the MQTT glue
   lives inside the native module's <code>initMdb()</code>, so JS usage is completely unchanged.</p>
 
   <h2 id="configs"><span class="eyebrow">06 &middot; Payloads</span>Hex configs</h2>
@@ -348,5 +348,5 @@ cd android && ./gradlew assembleRelease
 </main>
 
 <footer>
-  react-native-mdb v1.0.0 &middot; wraps hardware-lib 7.5.0 + mqtt-lib 1.3.0 + CM30-HardwareLibrary 1.0.9 &middot; Android / armeabi-v7a
+  react-native-mdb v1.0.0 &middot; wraps hardware-lib 7.6.0 + mqtt-lib 1.3.0 + CM30-HardwareLibrary 1.0.9 &middot; Android / armeabi-v7a
 </footer>
