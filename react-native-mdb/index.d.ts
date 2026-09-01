@@ -69,6 +69,11 @@ declare const Mdb: {
   priceToAmount(raw: number): Promise<number>;
   priceToMinorUnits(raw: number): Promise<number>;
 
+  initPulse(highPulse: boolean): Promise<boolean>;
+  sendPulse(pulseWidthMs: number, pulsePeriodMs: number, count: number): Promise<boolean>;
+  vendorPulse(p1: number, p2: number, p3: number, p4: number): Promise<boolean>;
+  getPulseState(): Promise<{ initialized: boolean; highPulse: boolean; pendingTrains: number }>;
+
   getSuggestedDeviceId(): Promise<string>;
 
   onVendRequest(fn: (e: VendRequestEvent) => void): EmitterSubscription;

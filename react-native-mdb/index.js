@@ -99,6 +99,18 @@ const Mdb = {
   priceToAmount: (raw) => MdbRn.priceToAmount(raw),
   priceToMinorUnits: (raw) => MdbRn.priceToMinorUnits(raw),
 
+  // ---- pulse output ----
+  /** Polarity from the backend boolean: true = HIGH-pulse mode (idle driven LOW immediately),
+   * false = LOW-pulse mode (idle driven HIGH). Resolves true when the hardware accepted. */
+  initPulse: (highPulse) => MdbRn.initPulse(highPulse),
+  /** Sends one train (vendor-native timing, direction from initPulse) and resolves the REAL
+   * result: true only when every pulse physically went out. Resolves after ~period x count ms. */
+  sendPulse: (pulseWidthMs, pulsePeriodMs, count) => MdbRn.sendPulse(pulseWidthMs, pulsePeriodMs, count),
+  /** Raw vendor digital_out_pulse(p1,p2,p3,p4) passthrough - experiments only. */
+  vendorPulse: (p1, p2, p3, p4) => MdbRn.vendorPulse(p1, p2, p3, p4),
+  /** { initialized, highPulse, pendingTrains } */
+  getPulseState: () => MdbRn.getPulseState(),
+
   // ---- helpers ----
   /** Last 6 chars of ANDROID_ID, uppercased - the same scheme the dashboard's device list uses. */
   getSuggestedDeviceId: () => MdbRn.getSuggestedDeviceId(),

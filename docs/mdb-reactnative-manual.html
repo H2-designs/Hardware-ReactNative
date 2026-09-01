@@ -122,6 +122,7 @@
     <a href="#quickstart">Quick start</a>
     <a href="#payments">Payments</a>
     <a href="#functions">Functions</a>
+    <a href="#pulse">Pulse</a>
     <a href="#events">Events</a>
     <a href="#configs">Hex configs</a>
     <a href="#dashboard">Dashboard</a>
@@ -273,6 +274,22 @@ const subs = [
     <tr><th>Function</th><th>What it does</th></tr>
     <tr><td><code>getSuggestedDeviceId()</code></td><td>Last 6 chars of ANDROID_ID, uppercased &mdash; the exact scheme the dashboard's device dropdown expects.</td></tr>
   </table></div>
+
+  <h2 id="pulse"><span class="eyebrow">NEW &middot; hardware-lib 7.6.0</span>Pulse output</h2>
+  <p>Pulse driving over the CM30 digital IO, from JavaScript. Polarity comes from the backend
+  boolean; the train runs through the vendor's native pulser (direction =
+  <code>PULSE_DIR_POSITIVE</code> for high pulses, <code>PULSE_DIR_NEGATIVE</code> for low), so
+  the width can never stretch.</p>
+  <pre><code>await Mdb.initPulse(true);                  // true = HIGH pulses (idle LOW), false = LOW pulses (idle HIGH)
+const ok = await Mdb.sendPulse(50, 100, 3); // width ms, period ms, count - resolves ~period x count later
+                                            // true only when EVERY pulse physically went out
+await Mdb.getPulseState();                  // { initialized, highPulse, pendingTrains }</code></pre>
+  <p><code>sendPulse</code> resolves only after the train finishes; other Mdb calls keep working
+  meanwhile (the wait happens off RN's native-modules thread). Call <code>initPulse</code> before
+  the first train - it drives the idle level immediately and can be re-called whenever the
+  backend changes the setting. <code>vendorPulse(p1,p2,p3,p4)</code> is a raw passthrough for
+  experiments. Dashboard equivalents: <code>initPulse:true|false</code>,
+  <code>sendPulse:50,100,3</code>.</p>
 
   <h2 id="events"><span class="eyebrow">05 &middot; API</span>Events</h2>
   <p>Each subscription returns an object with <code>.remove()</code> &mdash; always unsubscribe on unmount.</p>

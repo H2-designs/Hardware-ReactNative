@@ -240,6 +240,37 @@ class MdbRnModule(private val reactContext: ReactApplicationContext) :
         promise.resolve((androidId ?: "unknown").takeLast(6).uppercase())
     }
 
+    // ------------------------------------ pulse output ------------------------------------
+
+    /** Polarity from the backend boolean: true = HIGH-pulse mode (idle driven LOW now),
+     * false = LOW-pulse mode (idle driven HIGH now). Resolves true when the hardware accepted. */
+    @ReactMethod fun initPulse(highPulse: Boolean, promise: Promise) =
+        promise.resolve(com.rabbah.mdb.PulseLib.initPulse(highPulse))
+
+    /** Sends one train through the vendor's native pulser (direction from initPulse) and
+     * resolves the REAL result: true only when every pulse physically went out. The native
+     * sendPulse blocks for ~period x count, so it runs on a detached thread here - RN's own
+     * native-modules thread is never stalled and other Mdb calls keep working meanwhile. */
+    @ReactMethod
+    fun sendPulse(pulseWidthMs: Int, pulsePeriodMs: Int, count: Int, promise: Promise) {
+        Thread({
+            promise.resolve(com.rabbah.mdb.PulseLib.sendPulse(pulseWidthMs, pulsePeriodMs, count))
+        }, "PulseRnBridge").start()
+    }
+
+    /** Raw passthrough to the vendor's digital_out_pulse(p1,p2,p3,p4) - experiments only. */
+    @ReactMethod fun vendorPulse(p1: Int, p2: Int, p3: Int, p4: Int, promise: Promise) =
+        promise.resolve(com.rabbah.mdb.PulseLib.vendorPulse(p1, p2, p3, p4))
+
+    /** Pulse state snapshot: { initialized, highPulse, pendingTrains }. */
+    @ReactMethod fun getPulseState(promise: Promise) {
+        val map = Arguments.createMap()
+        map.putBoolean("initialized", com.rabbah.mdb.PulseLib.isInitialized)
+        map.putBoolean("highPulse", com.rabbah.mdb.PulseLib.isHighPulse)
+        map.putInt("pendingTrains", com.rabbah.mdb.PulseLib.pendingTrains)
+        promise.resolve(map)
+    }
+
     // Required stubs so NativeEventEmitter does not warn on newer RN versions.
     @ReactMethod fun addListener(eventName: String) {}
     @ReactMethod fun removeListeners(count: Int) {}
