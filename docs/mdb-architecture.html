@@ -297,7 +297,7 @@
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.3.0</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-7.4.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -332,32 +332,32 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
 <table>
   <thead><tr><th>Code</th><th>VMC sends</th><th>We reply</th><th>Reply hex editable?</th></tr></thead>
   <tbody>
-    <tr><td>1</td><td>RESET (10)</td><td>ACK</td><td>fixed</td></tr>
-    <tr><td>2</td><td>POLL (12)</td><td>JUST RESET</td><td><code>JUST_RESET</code></td></tr>
-    <tr><td>3</td><td>SETUP CONFIG (11 00)</td><td>READER CONFIG DATA</td><td><code>READER_CONFIG_DATA</code></td></tr>
-    <tr><td>4</td><td>EXPANSION REQUEST ID (17 00)</td><td>PERIPHERAL ID</td><td><code>READER_CONFIG_INFO</code> / <code>_L3</code> &mdash; VMC's ID payload captured</td></tr>
-    <tr><td>5</td><td>SETUP MAX/MIN PRICES (11 01)</td><td>ACK</td><td>fixed (rx captured)</td></tr>
-    <tr><td>6</td><td>EXPANSION ENABLE OPTIONS (17 04)</td><td>ACK</td><td>fixed (rx captured)</td></tr>
-    <tr><td>7</td><td>READER ENABLE (14 01)</td><td>ACK</td><td>fixed</td></tr>
-    <tr><td>8</td><td>READER DISABLE (14 00)</td><td>ACK</td><td>fixed</td></tr>
-    <tr><td>9</td><td>READER CANCEL (14 02)</td><td>CANCELLED</td><td><code>CAN</code></td></tr>
-    <tr><td>10</td><td>POLL (12)</td><td>BEGIN SESSION</td><td><code>SESSION_BEGIN</code> / <code>_L2</code> (1&ndash;35 bytes)</td></tr>
-    <tr><td>11</td><td>VEND REQUEST (13 00)</td><td>ACK</td><td>fixed (price + item captured)</td></tr>
-    <tr><td>12</td><td>POLL (12)</td><td>VEND APPROVED</td><td><code>VEND_APPROVED</code></td></tr>
-    <tr><td>13</td><td>POLL (12)</td><td>VEND DENIED</td><td><code>VEND_DENIED</code></td></tr>
-    <tr><td>14</td><td>VEND SUCCESS (13 02)</td><td>ACK</td><td>fixed</td></tr>
-    <tr><td>15</td><td>VEND FAILURE (13 03)</td><td>ACK</td><td>fixed</td></tr>
-    <tr><td>16</td><td>VEND SESSION COMPLETE (13 04)</td><td>ACK</td><td>fixed</td></tr>
-    <tr><td>17</td><td>POLL (12)</td><td>END SESSION</td><td><code>END_SESSION</code></td></tr>
-    <tr><td>18</td><td>VEND CANCEL (13 01)</td><td>ACK</td><td>fixed</td></tr>
-    <tr><td>19</td><td>POLL (12)</td><td>SESSION CANCEL REQUEST</td><td><code>SESSION_CANCEL</code></td></tr>
-    <tr><td>20</td><td>REVALUE REQUEST (15 00)</td><td>REVALUE DENIED</td><td><code>REVALUE_DENIED</code></td></tr>
-    <tr><td>21</td><td>REVALUE LIMIT REQUEST (15 01)</td><td>REVALUE LIMIT AMOUNT</td><td><code>REVALUE_LIMIT</code></td></tr>
-    <tr><td>22</td><td>CASH SALE (13 05)</td><td>ACK</td><td>fixed (price + item captured)</td></tr>
-    <tr><td>23</td><td>POLL (12), idle</td><td>ACK</td><td>fixed</td></tr>
-    <tr><td>24</td><td>EXPANSION, other subcommand</td><td>(varies)</td><td>&mdash;</td></tr>
-    <tr><td>90</td><td>other peripheral (outside 10&ndash;17)</td><td>(ignored)</td><td>&mdash;</td></tr>
-    <tr><td>99</td><td>unrecognized in current state</td><td>(none)</td><td>&mdash;</td></tr>
+    <tr><td>111</td><td>RESET (10)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>112</td><td>POLL (12)</td><td>JUST RESET</td><td><code>JUST_RESET</code></td></tr>
+    <tr><td>113</td><td>SETUP CONFIG (11 00)</td><td>READER CONFIG DATA</td><td><code>READER_CONFIG_DATA</code></td></tr>
+    <tr><td>114</td><td>EXPANSION REQUEST ID (17 00)</td><td>PERIPHERAL ID</td><td><code>READER_CONFIG_INFO</code> / <code>_L3</code> &mdash; VMC's ID payload captured</td></tr>
+    <tr><td>115</td><td>SETUP MAX/MIN PRICES (11 01)</td><td>ACK</td><td>fixed (rx captured)</td></tr>
+    <tr><td>116</td><td>EXPANSION ENABLE OPTIONS (17 04)</td><td>ACK</td><td>fixed (rx captured)</td></tr>
+    <tr><td>117</td><td>READER ENABLE (14 01)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>118</td><td>READER DISABLE (14 00)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>119</td><td>READER CANCEL (14 02)</td><td>CANCELLED</td><td><code>CAN</code></td></tr>
+    <tr><td>120</td><td>POLL (12)</td><td>BEGIN SESSION</td><td><code>SESSION_BEGIN</code> / <code>_L2</code> (1&ndash;35 bytes)</td></tr>
+    <tr><td>121</td><td>VEND REQUEST (13 00)</td><td>ACK</td><td>fixed (price + item captured)</td></tr>
+    <tr><td>122</td><td>POLL (12)</td><td>VEND APPROVED</td><td><code>VEND_APPROVED</code></td></tr>
+    <tr><td>123</td><td>POLL (12)</td><td>VEND DENIED</td><td><code>VEND_DENIED</code></td></tr>
+    <tr><td>124</td><td>VEND SUCCESS (13 02)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>125</td><td>VEND FAILURE (13 03)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>126</td><td>VEND SESSION COMPLETE (13 04)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>127</td><td>POLL (12)</td><td>END SESSION</td><td><code>END_SESSION</code></td></tr>
+    <tr><td>128</td><td>VEND CANCEL (13 01)</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>129</td><td>POLL (12)</td><td>SESSION CANCEL REQUEST</td><td><code>SESSION_CANCEL</code></td></tr>
+    <tr><td>130</td><td>REVALUE REQUEST (15 00)</td><td>REVALUE DENIED</td><td><code>REVALUE_DENIED</code></td></tr>
+    <tr><td>131</td><td>REVALUE LIMIT REQUEST (15 01)</td><td>REVALUE LIMIT AMOUNT</td><td><code>REVALUE_LIMIT</code></td></tr>
+    <tr><td>132</td><td>CASH SALE (13 05)</td><td>ACK</td><td>fixed (price + item captured)</td></tr>
+    <tr><td>133</td><td>POLL (12), idle</td><td>ACK</td><td>fixed</td></tr>
+    <tr><td>134</td><td>EXPANSION, other subcommand</td><td>(varies)</td><td>&mdash;</td></tr>
+    <tr><td>190</td><td>other peripheral (outside 10&ndash;17)</td><td>(ignored)</td><td>&mdash;</td></tr>
+    <tr><td>199</td><td>unrecognized in current state</td><td>(none)</td><td>&mdash;</td></tr>
   </tbody>
 </table>
   </section>
@@ -863,7 +863,7 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
 </main>
 
 <footer>
-  CM30 MDB Slave project. Current as of app v2.13.7 (build 55) / hardware-lib 7.3.0 / mqtt-lib 2.0.0: compact RabbahLog codebook envelope, generic RabbahMqtt API, broker auth, backend-contract topic suffixes, retained online/offline presence (birth + LWT), two-thread timing
+  CM30 MDB Slave project. Current as of app v2.13.7 (build 55) / hardware-lib 7.4.0 / mqtt-lib 2.0.0: compact RabbahLog codebook envelope, generic RabbahMqtt API, broker auth, backend-contract topic suffixes, retained online/offline presence (birth + LWT), two-thread timing
   engine (bus + offload), JUST RESET consumed once setup starts, order-independent setup retries,
   REVALUE handling, and variable-length BEGIN SESSION payloads. Handshakes and bit layouts
   verified against the MDB/ICP v4.3 specification and against real machine traces.

@@ -4,7 +4,7 @@ Two fully decoupled Android libraries extracted from the proven MDB Slave app:
 
 | Artifact | What it is |
 |---|---|
-| `hardware-lib-7.3.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
+| `hardware-lib-7.4.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
 | `mqtt-lib-2.0.0.aar` | MQTT 3.1.1 transport (queue + publisher thread + auto-reconnect, broker **username/password** auth, retained presence/LWT, **connection-state listener**) **plus the Rabbah compact-log layer**: `RabbahLog`, the unified MDB/INFO codebooks, and `RabbahMqtt` (send/receive logs, text or JSON on any topic — zero MDB involvement). |
 | `CM30-HardwareLibrary-1.0.9.aar` | The CM30 vendor serial driver (hardware-lib needs it at runtime; AARs do not nest). |
 
@@ -54,7 +54,7 @@ fully offline.
 
 > Migration note: the Kotlin package is still `com.rabbah.mdb` and a deprecated
 > `typealias MdbLib = HardwareLib` keeps old code compiling — the only hard change is the
-> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.3.0.aar`) and that MQTT
+> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.4.0.aar`) and that MQTT
 > forwarding now needs the bridge attached.
 
 ## The CMD code schema
@@ -65,52 +65,52 @@ number.
 
 | Code | VMC sends | We reply | Reply hex editable? | RX captured |
 |---|---|---|---|---|
-| 1 | RESET (10) | ACK | fixed | yes |
-| 2 | POLL (12) | JUST RESET | `JUST_RESET` | yes |
-| 3 | SETUP CONFIG (11 00) | READER CONFIG DATA | `READER_CONFIG_DATA` | yes |
-| 4 | EXPANSION REQUEST ID (17 00) | PERIPHERAL ID | `READER_CONFIG_INFO` / `_L3` | yes — the VMC's ID payload |
-| 5 | SETUP MAX/MIN PRICES (11 01) | ACK | fixed | yes — the price limits |
-| 6 | EXPANSION ENABLE OPTIONS (17 04) | ACK | fixed | yes — the feature bits |
-| 7 | READER ENABLE (14 01) | ACK | fixed | yes |
-| 8 | READER DISABLE (14 00) | ACK | fixed | yes |
-| 9 | READER CANCEL (14 02) | CANCELLED | `CAN` | yes |
-| 10 | POLL (12) | BEGIN SESSION | `SESSION_BEGIN` / `_L2` (1–35 bytes) | yes |
-| 11 | VEND REQUEST (13 00) | ACK | fixed | yes — price + item |
-| 12 | POLL (12) | VEND APPROVED | `VEND_APPROVED` | yes |
-| 13 | POLL (12) | VEND DENIED | `VEND_DENIED` | yes |
-| 14 | VEND SUCCESS (13 02) | ACK | fixed | yes |
-| 15 | VEND FAILURE (13 03) | ACK | fixed | yes |
-| 16 | VEND SESSION COMPLETE (13 04) | ACK | fixed | yes |
-| 17 | POLL (12) | END SESSION | `END_SESSION` | yes |
-| 18 | VEND CANCEL (13 01) | ACK | fixed | yes |
-| 19 | POLL (12) | SESSION CANCEL REQUEST | `SESSION_CANCEL` | yes |
-| 20 | REVALUE REQUEST (15 00) | REVALUE DENIED | `REVALUE_DENIED` | yes |
-| 21 | REVALUE LIMIT REQUEST (15 01) | REVALUE LIMIT AMOUNT | `REVALUE_LIMIT` | yes |
-| 22 | CASH SALE (13 05) | ACK | fixed | yes — price + item |
-| 23 | POLL (12), idle | ACK | fixed | yes |
-| 24 | EXPANSION, other subcommand | (varies) | — | yes |
-| 90 | other peripheral (outside 10–17) | (ignored) | — | yes |
-| 99 | unrecognized in current state | (none) | — | yes |
-| 0 | anything unmatched (fallback) | — | — | yes |
+| 111 | RESET (10) | ACK | fixed | yes |
+| 112 | POLL (12) | JUST RESET | `JUST_RESET` | yes |
+| 113 | SETUP CONFIG (11 00) | READER CONFIG DATA | `READER_CONFIG_DATA` | yes |
+| 114 | EXPANSION REQUEST ID (17 00) | PERIPHERAL ID | `READER_CONFIG_INFO` / `_L3` | yes — the VMC's ID payload |
+| 115 | SETUP MAX/MIN PRICES (11 01) | ACK | fixed | yes — the price limits |
+| 116 | EXPANSION ENABLE OPTIONS (17 04) | ACK | fixed | yes — the feature bits |
+| 117 | READER ENABLE (14 01) | ACK | fixed | yes |
+| 118 | READER DISABLE (14 00) | ACK | fixed | yes |
+| 119 | READER CANCEL (14 02) | CANCELLED | `CAN` | yes |
+| 120 | POLL (12) | BEGIN SESSION | `SESSION_BEGIN` / `_L2` (1–35 bytes) | yes |
+| 121 | VEND REQUEST (13 00) | ACK | fixed | yes — price + item |
+| 122 | POLL (12) | VEND APPROVED | `VEND_APPROVED` | yes |
+| 123 | POLL (12) | VEND DENIED | `VEND_DENIED` | yes |
+| 124 | VEND SUCCESS (13 02) | ACK | fixed | yes |
+| 125 | VEND FAILURE (13 03) | ACK | fixed | yes |
+| 126 | VEND SESSION COMPLETE (13 04) | ACK | fixed | yes |
+| 127 | POLL (12) | END SESSION | `END_SESSION` | yes |
+| 128 | VEND CANCEL (13 01) | ACK | fixed | yes |
+| 129 | POLL (12) | SESSION CANCEL REQUEST | `SESSION_CANCEL` | yes |
+| 130 | REVALUE REQUEST (15 00) | REVALUE DENIED | `REVALUE_DENIED` | yes |
+| 131 | REVALUE LIMIT REQUEST (15 01) | REVALUE LIMIT AMOUNT | `REVALUE_LIMIT` | yes |
+| 132 | CASH SALE (13 05) | ACK | fixed | yes — price + item |
+| 133 | POLL (12), idle | ACK | fixed | yes |
+| 134 | EXPANSION, other subcommand | (varies) | — | yes |
+| 190 | other peripheral (outside 10–17) | (ignored) | — | yes |
+| 199 | unrecognized in current state | (none) | — | yes |
+| 110 | anything unmatched (fallback) | — | — | yes |
 
 Working with codes from Android:
 
 ```kotlin
 HardwareLib.exchangeListener = { e ->
     when (e.code) {
-        3  -> Log.i(TAG, "setup answered with ${HardwareLib.getReplyHex(3)}")
-        4  -> Log.i(TAG, "VMC identified itself: ${e.rxHex}")
-        11 -> Log.i(TAG, "vend request: ${e.message}")   // human sentence, ready to show
+        113 -> Log.i(TAG, "setup answered with ${HardwareLib.getReplyHex(113)}")
+        114 -> Log.i(TAG, "VMC identified itself: ${e.rxHex}")
+        121 -> Log.i(TAG, "vend request: ${e.message}")   // human sentence, ready to show
     }
 }
 
-HardwareLib.getReplyHex(4)                 // current PERIPHERAL ID payload (level-aware)
-HardwareLib.setReplyHex(4, "09 01 ...")    // edit it by code — null = ok, else error text
-HardwareLib.setReplyHex(3, "01 02 19 78 01 02 E8 0B")   // READER CONFIG DATA
-HardwareLib.lastReceivedHex(4)             // the VMC's last EXPANSION REQUEST ID frame, saved
-HardwareLib.lastReceivedJson()             // {"4": "17 00 ...", "5": "11 01 ...", ...}
-HardwareLib.replyConfigName(10)            // "SESSION_BEGIN_L2" (at level 2/3)
-MdbCmd.fromCode(4)                         // the schema entry itself (names, template)
+HardwareLib.getReplyHex(114)                 // current PERIPHERAL ID payload (level-aware)
+HardwareLib.setReplyHex(114, "09 01 ...")    // edit it by code — null = ok, else error text
+HardwareLib.setReplyHex(113, "01 02 19 78 01 02 E8 0B")   // READER CONFIG DATA
+HardwareLib.lastReceivedHex(114)             // the VMC's last EXPANSION REQUEST ID frame, saved
+HardwareLib.lastReceivedJson()             // {"114": "17 00 ...", "115": "11 01 ...", ...}
+HardwareLib.replyConfigName(120)            // "SESSION_BEGIN_L2" (at level 2/3)
+MdbCmd.fromCode(114)                         // the schema entry itself (names, template)
 ```
 
 Each `MdbExchangeEvent` carries: `cmd`/`code`, `rxHex`, `txName`, `params` (codebook-ready:
@@ -141,12 +141,12 @@ VMC sends 11 00 ... → library replies READER CONFIG DATA
         │     "SETUP CONFIG rx=11 00 03 10 tx=READER CONFIG DATA level=2"
         │
         └─ exchangeListener gets AN OBJECT (ready to use):
-              code = 3, rxHex = "11 00 03 10", txName = "READER CONFIG DATA", sessionId, ...
+              code = 113, rxHex = "11 00 03 10", txName = "READER CONFIG DATA", sessionId, ...
 ```
 
 - **`logListener` = text, for display** — a TextView, Logcat, a log file. You can't easily ask
-  "was this code 3?" without parsing the sentence.
-- **`exchangeListener` = data, for logic** — `if (e.code == 3) ...`, analytics, forwarding,
+  "was this code 113?" without parsing the sentence.
+- **`exchangeListener` = data, for logic** — `if (e.code == 113) ...`, analytics, forwarding,
   saving hex. Its `e.message` is the identical sentence logListener receives.
 - One extra scope difference: `logListener` ALSO hears the engine's status lines
   (`[remote] vend approved requested`, `open() failed…`, config acks); `exchangeListener`
@@ -164,7 +164,7 @@ bridge registers through the multi-listener API instead, so **the var slots are 
 for your code**, and any number of extra consumers can register:
 
 ```kotlin
-val mine: (MdbExchangeEvent) -> Unit = { e -> if (e.code == 11) charge(e.params[2].toInt()) }
+val mine: (MdbExchangeEvent) -> Unit = { e -> if (e.code == 121) charge(e.params[2].toInt()) }
 HardwareLib.addExchangeListener(mine)      // alongside the bridge, alongside the var slot
 HardwareLib.removeExchangeListener(mine)   // true when it was registered
 
@@ -178,7 +178,7 @@ All registered listeners AND the var slot receive every event; a listener that t
 caught and skipped, never fatal to the others.
 
 **If exchangeListener seems to receive nothing, check in this order:** (1) stale AAR — the
-demo app prints `hardware-lib 7.3.0` in its boot banner (`HardwareLib.VERSION`); anything
+demo app prints `hardware-lib 7.4.0` in its boot banner (`HardwareLib.VERSION`); anything
 older means your build still bundles the old library; (2) you are on < 7.2.0 and the bridge
 overwrote your assignment — upgrade, or use `addExchangeListener`; (3) no real VMC is
 connected — exchange events fire only for actual bus frames (the engine reports
@@ -188,10 +188,10 @@ after expecting past events — there is no replay, only live exchanges from reg
 **The built-in self-test (7.3.0):** `HardwareLib.simulateExchange("10 10")` pushes a fake
 RESET through the exact classify → template → listener pipeline — no machine, no open port
 needed; listeners fire synchronously on the calling thread. The demo app runs it once at
-boot, so the screen always shows `[exchange] code=1 RESET_ACK rx=10 10 tx=ACK` within a
+boot, so the screen always shows `[exchange] code=111 RESET_ACK rx=10 10 tx=ACK` within a
 second of launch — if you see that line, the exchange feed provably works on the device.
 Dashboard equivalent: send the command `simulateExchange:10 10` (any hex works, e.g.
-`simulateExchange:13 00 01 F4 00 03` produces a code-11 VEND REQUEST with price 500).
+`simulateExchange:13 00 01 F4 00 03` produces a code-121 VEND REQUEST with price 500).
 
 All listeners run on the engine's offload thread, never the bus thread — a slow listener can
 never make a response miss the VMC's reply window, but return promptly anyway. Attach
@@ -327,7 +327,7 @@ status line, and an `inbox` subscription you can hit with `mosquitto_pub`.
 Preferred: consume the modules directly (`implementation project(':hardware-lib')`,
 `project(':mqtt-lib')`) — see the demo `app/`.
 
-If consuming raw AARs instead: add `hardware-lib-7.3.0.aar`, `mqtt-lib-2.0.0.aar`, **and**
+If consuming raw AARs instead: add `hardware-lib-7.4.0.aar`, `mqtt-lib-2.0.0.aar`, **and**
 `CM30-HardwareLibrary-1.0.9.aar` (hardware-lib needs it at runtime; AARs do not nest). If you
 skip MQTT entirely, `hardware-lib` + the CM30 AAR alone are enough.
 
