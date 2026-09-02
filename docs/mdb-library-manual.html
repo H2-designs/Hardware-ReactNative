@@ -128,14 +128,14 @@
     The complete developer manual for <code class="cmd">hardware-lib</code> and
     <code class="cmd">mqtt-lib</code>: every function with a working example, every dashboard
     command, and what actually happens inside when you call each one. Current as of
-    hardware-lib&nbsp;7.9.3 / mqtt-lib&nbsp;2.0.0.
+    hardware-lib&nbsp;7.10.0 / mqtt-lib&nbsp;2.0.0.
   </p>
 
 
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.9.3</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-7.10.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -275,7 +275,7 @@ HardwareLib.addControlListener / removeControlListener</pre>
     <p>Add the AARs (or the Gradle modules) and initialize once at app startup:</p>
     <pre class="code"><span class="c">// build.gradle (raw AARs; skip if using the Gradle modules directly)</span>
 implementation files(<span class="s">'libs/mqtt-lib-2.0.0.aar'</span>)
-implementation files(<span class="s">'libs/hardware-lib-7.9.3.aar'</span>)
+implementation files(<span class="s">'libs/hardware-lib-7.10.0.aar'</span>)
 implementation files(<span class="s">'libs/CM30-HardwareLibrary-1.0.9.aar'</span>)  <span class="c">// hardware-lib's hardware runtime</span></pre>
 
     <pre class="code"><span class="c">// In your Application class or first Activity - the whole startup:</span>
@@ -591,6 +591,31 @@ HardwareLib.setConfigHex(HardwareLib.ConfigName.READER_CONFIG_INFO_L3,
 
   
   <!-- ============================================================ -->
+  
+  <!-- ============================================================ -->
+  <section id="rs232">
+    <h2><span class="eyebrow">NEW &mdash; 7.10.0</span>RS232 &mdash; configurable RX &rarr; TX rules</h2>
+    <p>The machine talks over the CM30 serial port; the library answers from a rule table you
+    define - up to 20 commands, added at runtime (code or dashboard JSON), persisted,
+    hot-reloaded. "When rx this, tx this":</p>
+    <pre class="code">Rs232Lib.setRulesJson(<span class="s">"""[
+  {"name":"STATUS",       "rx":"FF FF FF FF FF", "tx":"01 00"},
+  {"name":"VEND_REQUEST", "rx":"F1 05 ?? ?? 0D", "tx":"06", "priceHi":2, "priceLo":3}
+]"""</span>)
+Rs232Lib.open(baud = <span class="s">9600</span>)
+Rs232Lib.vendRequestListener = { price, frame -&gt; <span class="c">/* charge, then Rs232Lib.sendHex(approvalHex) */</span> }</pre>
+    <p><code>??</code> in an rx pattern matches ANY byte - a vend request whose price bytes
+    change still matches one rule; <code>priceHi</code>/<code>priceLo</code> are the 0-based
+    byte positions of the price high/low bytes, extracted as hi&times;256+lo and delivered via
+    <code>vendRequestListener</code>. Frames are cut from the stream by silence
+    (<code>frameGapMs</code>, default 20 ms); first matching rule wins; replies are written
+    before logging. Manual TX any time with <code>sendHex(hex)</code>;
+    <code>exchangeListener</code> gets every frame (rxHex, ruleName, txHex, price). Dashboard
+    commands: <code>rs232Open[:9600[,8,1,N]]</code>, <code>rs232Close</code>,
+    <code>rs232Send:HEX</code>, <code>getRs232Rules</code>, <code>clearRs232Rules</code>, and
+    <code>{"setRs232Rules":[...]}</code> to push the whole table remotely.</p>
+  </section>
+
   <section id="pulse">
     <h2><span class="eyebrow">NEW &mdash; 7.5.0</span>Pulse output &mdash; PulseLib</h2>
     <p>Pulse driving over the CM30's digital IO (<code>android.hardware.digital.DigitalIO</code>).
@@ -766,6 +791,6 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
 </main>
 
 <footer>
-  CM30 MDB Slave project — developer manual. hardware-lib 7.9.3 · mqtt-lib 2.0.0 · demo app v2.13.23
+  CM30 MDB Slave project — developer manual. hardware-lib 7.10.0 · mqtt-lib 2.0.0 · demo app v2.13.24
   (build 54). Companion docs: the architecture reference and the interactive vend simulator.
 </footer>

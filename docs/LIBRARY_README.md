@@ -4,7 +4,7 @@ Two fully decoupled Android libraries extracted from the proven MDB Slave app:
 
 | Artifact | What it is |
 |---|---|
-| `hardware-lib-7.9.3.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
+| `hardware-lib-7.10.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
 | `mqtt-lib-2.0.0.aar` | MQTT 3.1.1 transport (queue + publisher thread + auto-reconnect, broker **username/password** auth, retained presence/LWT, **connection-state listener**) **plus the Rabbah compact-log layer**: `RabbahLog`, the unified MDB/INFO codebooks, and `RabbahMqtt` (send/receive logs, text or JSON on any topic — zero MDB involvement). |
 | `CM30-HardwareLibrary-1.0.9.aar` | The CM30 vendor serial driver (hardware-lib needs it at runtime; AARs do not nest). |
 
@@ -54,7 +54,7 @@ fully offline.
 
 > Migration note: the Kotlin package is still `com.rabbah.mdb` and a deprecated
 > `typealias MdbLib = HardwareLib` keeps old code compiling — the only hard change is the
-> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.9.3.aar`) and that MQTT
+> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.10.0.aar`) and that MQTT
 > forwarding now needs the bridge attached.
 
 ## The CMD code schema
@@ -266,6 +266,45 @@ val ok = PulseLib.sendPulse(pulseWidthMs = 50, pulsePeriodMs = 100, count = 3)
   constants: `PULSE_DIR_POSITIVE=0`, `PULSE_DIR_NEGATIVE=1`).
 - No CM30 runtime (emulator) → reported `[pulse] ... failed` lines and `false`, never a crash.
 
+## RS232 — configurable RX → TX rules (7.10.0)
+
+The third hardware pillar: the machine talks over the CM30 serial port, and the library
+answers from a rule table YOU define — up to 20 commands, added at runtime, persisted,
+hot-reloaded. "When rx this, tx this" — and it starts working:
+
+```kotlin
+Rs232Lib.setRulesJson("""[
+  {"name":"STATUS",       "rx":"FF FF FF FF FF", "tx":"01 00"},
+  {"name":"VEND_REQUEST", "rx":"F1 05 ?? ?? 0D", "tx":"06", "priceHi":2, "priceLo":3}
+]""")
+Rs232Lib.open(baud = 9600)              // defaults: 8 data bits, 1 stop bit, no parity
+Rs232Lib.vendRequestListener = { price, frame ->
+    // price = hi*256 + lo, extracted from the frame's priceHi/priceLo byte positions
+    // charge the customer, then answer the machine: Rs232Lib.sendHex("05 01 F4")
+}
+```
+
+- **Matching**: rx is hex where `??` matches ANY byte (that is how a vend request whose price
+  bytes change per sale still matches one rule); frame length must equal the pattern length;
+  first matching rule wins. Frames are cut from the byte stream by silence (`frameGapMs`,
+  default 20 ms — RS232 has no frame markers).
+- **Vend request rules**: `priceHi`/`priceLo` name the byte POSITIONS (0-based) inside the
+  frame carrying the price high and low bytes — on match the price (hi × 256 + lo) is
+  extracted and `vendRequestListener(price, frameHex)` fires. Reply immediately via the
+  rule's `tx`, later via `sendHex(hex)`, or both.
+- **API**: `open(baud, dataBits, stopBits, parity)` / `close()` / `isOpen`,
+  `setRulesJson(json)` (null = ok, else the error text) / `rulesJson()` / `clearRules()`,
+  `sendHex(hex)`, `exchangeListener` (every frame: rxHex, ruleName, txHex, price),
+  `vendRequestListener(price, frameHex)`.
+- **Dashboard/backend commands** (via handleCommand, so they work over MQTT):
+  `rs232Open` / `rs232Open:9600` / `rs232Open:9600,8,1,N`, `rs232Close`, `rs232Send:HEX`,
+  `getRs232Rules`, `clearRs232Rules`, and the rule table as JSON
+  `{"setRs232Rules":[{"name":"...","rx":"...","tx":"...","priceHi":2,"priceLo":3}]}` —
+  so the backend can push the whole command set remotely, no rebuild.
+- Every frame reports as a `[rs232] rx=... matched=NAME tx=...` log line (`UNMATCHED` when no
+  rule fits); replies are written before logging, same discipline as the MDB engine. Rules
+  survive restarts (restored by `HardwareLib.init`).
+
 ## RabbahLog — sending logs (the compact codebook envelope)
 
 ```kotlin
@@ -369,7 +408,7 @@ status line, and an `inbox` subscription you can hit with `mosquitto_pub`.
 Preferred: consume the modules directly (`implementation project(':hardware-lib')`,
 `project(':mqtt-lib')`) — see the demo `app/`.
 
-If consuming raw AARs instead: add `hardware-lib-7.9.3.aar`, `mqtt-lib-2.0.0.aar`, **and**
+If consuming raw AARs instead: add `hardware-lib-7.10.0.aar`, `mqtt-lib-2.0.0.aar`, **and**
 `CM30-HardwareLibrary-1.0.9.aar` (hardware-lib needs it at runtime; AARs do not nest). If you
 skip MQTT entirely, `hardware-lib` + the CM30 AAR alone are enough.
 
