@@ -128,14 +128,14 @@
     The complete developer manual for <code class="cmd">hardware-lib</code> and
     <code class="cmd">mqtt-lib</code>: every function with a working example, every dashboard
     command, and what actually happens inside when you call each one. Current as of
-    hardware-lib&nbsp;7.9.1 / mqtt-lib&nbsp;2.0.0.
+    hardware-lib&nbsp;7.9.2 / mqtt-lib&nbsp;2.0.0.
   </p>
 
 
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.9.1</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-7.9.2</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -234,7 +234,7 @@ HardwareLib.addControlListener / removeControlListener</pre>
     (<code>MdbCmd</code>, append-only). Edit a reply by number with
     <code>setReplyHex(code, hex)</code> / read it with <code>getReplyHex(code)</code>; the last
     frame the VMC sent per code is saved &mdash; <code>lastReceivedHex(code)</code> /
-    <code>lastReceivedJson()</code>:</p>
+    <code>lastReceivedJson()</code>; <code>replyWireHex(code)</code> returns the LIVE wire bytes a code is answered with, CHK included ("00" = bare ACK, null = sends nothing), and <code>MdbCmd.fromCode(code)!!.rxShowsHex</code> says whether that code logs raw hex or the command name in {0} (7.9.2 - both live in the schema code itself):</p>
     
 <table>
   <thead><tr><th>Code</th><th>VMC sends</th><th>We reply</th><th>Reply hex editable?</th></tr></thead>
@@ -275,7 +275,7 @@ HardwareLib.addControlListener / removeControlListener</pre>
     <p>Add the AARs (or the Gradle modules) and initialize once at app startup:</p>
     <pre class="code"><span class="c">// build.gradle (raw AARs; skip if using the Gradle modules directly)</span>
 implementation files(<span class="s">'libs/mqtt-lib-2.0.0.aar'</span>)
-implementation files(<span class="s">'libs/hardware-lib-7.9.1.aar'</span>)
+implementation files(<span class="s">'libs/hardware-lib-7.9.2.aar'</span>)
 implementation files(<span class="s">'libs/CM30-HardwareLibrary-1.0.9.aar'</span>)  <span class="c">// hardware-lib's hardware runtime</span></pre>
 
     <pre class="code"><span class="c">// In your Application class or first Activity - the whole startup:</span>
@@ -765,6 +765,6 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
 </main>
 
 <footer>
-  CM30 MDB Slave project — developer manual. hardware-lib 7.9.1 · mqtt-lib 2.0.0 · demo app v2.13.21
+  CM30 MDB Slave project — developer manual. hardware-lib 7.9.2 · mqtt-lib 2.0.0 · demo app v2.13.22
   (build 54). Companion docs: the architecture reference and the interactive vend simulator.
 </footer>
