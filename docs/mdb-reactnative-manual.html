@@ -147,7 +147,7 @@
   </p>
   <ul>
     <li><code>minSdkVersion = 30</code> &mdash; the CM30 terminal runs Android 11 and the AARs are built for it.</li>
-    <li>Nothing else. The three AARs (<code>hardware-lib-7.9.0</code>, <code>mqtt-lib-2.0.0</code>,
+    <li>Nothing else. The three AARs (<code>hardware-lib-7.9.1</code>, <code>mqtt-lib-2.0.0</code>,
         <code>CM30-HardwareLibrary-1.0.9</code>) are bundled inside the package's <code>android/libs</code>.</li>
   </ul>
   <div class="callout warn">
@@ -276,7 +276,7 @@ const subs = [
     <tr><td><code>getSuggestedDeviceId()</code></td><td>Last 6 chars of ANDROID_ID, uppercased &mdash; the exact scheme the dashboard's device dropdown expects.</td></tr>
   </table></div>
 
-  <h2 id="pulse"><span class="eyebrow">NEW &middot; hardware-lib 7.9.0</span>Pulse output</h2>
+  <h2 id="pulse"><span class="eyebrow">NEW &middot; hardware-lib 7.9.1</span>Pulse output</h2>
   <p>Pulse driving over the CM30 digital IO, from JavaScript. Polarity comes from the backend
   boolean; the train runs through the vendor's native pulser (direction =
   <code>PULSE_DIR_POSITIVE</code> for high pulses, <code>PULSE_DIR_NEGATIVE</code> for low), so
@@ -284,7 +284,9 @@ const subs = [
   <pre><code>await Mdb.initPulse(true);                  // true = HIGH pulses (idle LOW), false = LOW pulses (idle HIGH)
 const ok = await Mdb.sendPulse(50, 100, 3); // width ms, period ms, count - resolves ~period x count later
                                             // true only when EVERY pulse physically went out
-await Mdb.getPulseState();                  // { initialized, highPulse, pendingTrains }</code></pre>
+await Mdb.getPulseState();                  // { initialized, highPulse, pendingTrains }
+await Mdb.setReadyFeedback(model.supportReadyFeedback, model.readyFeedbackValue); // dashboard flag
+await Mdb.isMachineReady();                 // digital-in check now - sendPulse runs it automatically</code></pre>
   <p><code>sendPulse</code> resolves only after the train finishes; other Mdb calls keep working
   meanwhile (the wait happens off RN's native-modules thread). Call <code>initPulse</code> before
   the first train - it drives the idle level immediately and can be re-called whenever the
@@ -303,10 +305,10 @@ await Mdb.getPulseState();                  // { initialized, highPulse, pending
     <tr><td><span class="pill event">onLog</span></td><td><code>{ line, showOnScreen }</code></td><td>Every engine log line. Never render <code>showOnScreen: false</code> lines into a growing list.</td></tr>
     <tr><td><span class="pill event">onStatus</span></td><td><code>{ json }</code></td><td>VMC status &mdash; instantly on every state change, plus a recentActivity flip (event-driven, no periodic heartbeat).</td></tr>
     <tr><td><span class="pill event">onRemoteCommand</span></td><td><code>{ command }</code></td><td>A dashboard command the MDB engine did not recognize &mdash; your app's own custom commands arrive here.</td></tr>
-    <tr><td><span class="pill event">MdbStateChanged</span></td><td><code>{ state }</code></td><td>New in hardware-lib 7.9.0 (raw DeviceEventEmitter name). Edge-triggered on every transition: INACTIVE_STATE / DISABLED_STATE / ENABLED_STATE / VEND_STATE &mdash; never fires on heartbeats.</td></tr>
-    <tr><td><span class="pill event">MdbExchange</span></td><td><code>{ code, name, rxHex, txName, message, sessionId? }</code></td><td>New in hardware-lib 7.9.0 (raw DeviceEventEmitter name). One per bus exchange, with its stable integer CMD code (111&nbsp;=&nbsp;RESET&rarr;ACK, 112&nbsp;=&nbsp;POLL&rarr;JUST&nbsp;RESET, 113&nbsp;=&nbsp;SETUP&rarr;READER&nbsp;CONFIG, 114&nbsp;=&nbsp;EXPANSION&rarr;PERIPHERAL&nbsp;ID, ... full table in the Library Manual).</td></tr>
+    <tr><td><span class="pill event">MdbStateChanged</span></td><td><code>{ state }</code></td><td>New in hardware-lib 7.9.1 (raw DeviceEventEmitter name). Edge-triggered on every transition: INACTIVE_STATE / DISABLED_STATE / ENABLED_STATE / VEND_STATE &mdash; never fires on heartbeats.</td></tr>
+    <tr><td><span class="pill event">MdbExchange</span></td><td><code>{ code, name, rxHex, txName, message, sessionId? }</code></td><td>New in hardware-lib 7.9.1 (raw DeviceEventEmitter name). One per bus exchange, with its stable integer CMD code (111&nbsp;=&nbsp;RESET&rarr;ACK, 112&nbsp;=&nbsp;POLL&rarr;JUST&nbsp;RESET, 113&nbsp;=&nbsp;SETUP&rarr;READER&nbsp;CONFIG, 114&nbsp;=&nbsp;EXPANSION&rarr;PERIPHERAL&nbsp;ID, ... full table in the Library Manual).</td></tr>
   </table></div>
-  <p><strong>Since hardware-lib 7.9.0</strong> the Kotlin engine ships no networking; the MQTT glue
+  <p><strong>Since hardware-lib 7.9.1</strong> the Kotlin engine ships no networking; the MQTT glue
   lives inside the native module's <code>initMdb()</code>, so JS usage is completely unchanged.</p>
 
   <h2 id="configs"><span class="eyebrow">06 &middot; Payloads</span>Hex configs</h2>
@@ -366,5 +368,5 @@ cd android && ./gradlew assembleRelease
 </main>
 
 <footer>
-  react-native-mdb v1.0.0 &middot; wraps hardware-lib 7.9.0 + mqtt-lib 1.3.0 + CM30-HardwareLibrary 1.0.9 &middot; Android / armeabi-v7a
+  react-native-mdb v1.0.0 &middot; wraps hardware-lib 7.9.1 + mqtt-lib 1.3.0 + CM30-HardwareLibrary 1.0.9 &middot; Android / armeabi-v7a
 </footer>

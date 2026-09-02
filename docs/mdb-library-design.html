@@ -235,7 +235,7 @@
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.9.0</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-7.9.1</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -862,7 +862,7 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
     <div class="callout">
       <p>
         <strong>Artifacts:</strong> <code class="cmd">mqtt-lib-2.0.0.aar</code>,
-        <code class="cmd">hardware-lib-7.9.0.aar</code> (plus the bundled CM30 vendor .aar as its
+        <code class="cmd">hardware-lib-7.9.1.aar</code> (plus the bundled CM30 vendor .aar as its
         runtime dependency), the demo APK as the reference integration, and
         <code class="cmd">LIBRARY_README.md</code> for the integrating developer. Wire protocol
         unchanged throughout — the existing <code class="cmd">log-viewer.html</code> dashboard
@@ -873,6 +873,6 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
 </main>
 
 <footer>
-  CM30 MDB Slave project — library architecture, as built. Current as of hardware-lib 7.9.0 /
+  CM30 MDB Slave project — library architecture, as built. Current as of hardware-lib 7.9.1 /
   mqtt-lib 2.0.0 (demo app v2.13.7, build 55).
 </footer>
