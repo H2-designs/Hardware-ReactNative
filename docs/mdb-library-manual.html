@@ -128,14 +128,14 @@
     The complete developer manual for <code class="cmd">hardware-lib</code> and
     <code class="cmd">mqtt-lib</code>: every function with a working example, every dashboard
     command, and what actually happens inside when you call each one. Current as of
-    hardware-lib&nbsp;7.9.2 / mqtt-lib&nbsp;2.0.0.
+    hardware-lib&nbsp;7.9.3 / mqtt-lib&nbsp;2.0.0.
   </p>
 
 
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.9.2</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-7.9.3</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -275,7 +275,7 @@ HardwareLib.addControlListener / removeControlListener</pre>
     <p>Add the AARs (or the Gradle modules) and initialize once at app startup:</p>
     <pre class="code"><span class="c">// build.gradle (raw AARs; skip if using the Gradle modules directly)</span>
 implementation files(<span class="s">'libs/mqtt-lib-2.0.0.aar'</span>)
-implementation files(<span class="s">'libs/hardware-lib-7.9.2.aar'</span>)
+implementation files(<span class="s">'libs/hardware-lib-7.9.3.aar'</span>)
 implementation files(<span class="s">'libs/CM30-HardwareLibrary-1.0.9.aar'</span>)  <span class="c">// hardware-lib's hardware runtime</span></pre>
 
     <pre class="code"><span class="c">// In your Application class or first Activity - the whole startup:</span>
@@ -594,12 +594,13 @@ HardwareLib.setConfigHex(HardwareLib.ConfigName.READER_CONFIG_INFO_L3,
   <section id="pulse">
     <h2><span class="eyebrow">NEW &mdash; 7.5.0</span>Pulse output &mdash; PulseLib</h2>
     <p>Pulse driving over the CM30's digital IO (<code>android.hardware.digital.DigitalIO</code>).
-    A stretched pulse width is a rejected pulse, so the train runs through the vendor's own
-    native pulser <code>digital_out_pulse(direction, width, period, count)</code> - edge timing
-    lives in the driver, below Android's scheduler. Direction follows the polarity
-    (HIGH-pulse mode = <code>PULSE_DIR_POSITIVE</code>, LOW-pulse mode =
-    <code>PULSE_DIR_NEGATIVE</code>), and the call is issued from a dedicated
-    <code>PulseWorker</code> thread at URGENT_AUDIO priority - one train at a time, in order.</p>
+    A stretched pulse width is a rejected pulse, so the engine drives EVERY edge itself via
+    <code>digital_out_set_value</code> on a dedicated <code>PulseWorker</code> thread at
+    URGENT_AUDIO priority - active level for width ms, idle for (period - width) ms, exactly
+    count times, with deadline-based sleep-then-spin waits. The vendor's own
+    <code>digital_out_pulse</code> is NOT used for trains: tested on real hardware (7.9.3) it
+    produced the wrong pulse count and ignored the direction - it remains available as
+    <code>vendorPulse(p1,p2,p3,p4)</code> for experiments only.</p>
     <pre class="code"><span class="c">// polarity, from the backend/dashboard boolean:</span>
 PulseLib.initPulse(<span class="k">true</span>)    <span class="c">// HIGH-pulse mode: pin idles LOW now, pulses go HIGH</span>
 PulseLib.initPulse(<span class="k">false</span>)   <span class="c">// LOW-pulse mode:  pin idles HIGH now, pulses go LOW</span>
@@ -765,6 +766,6 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
 </main>
 
 <footer>
-  CM30 MDB Slave project — developer manual. hardware-lib 7.9.2 · mqtt-lib 2.0.0 · demo app v2.13.22
+  CM30 MDB Slave project — developer manual. hardware-lib 7.9.3 · mqtt-lib 2.0.0 · demo app v2.13.23
   (build 54). Companion docs: the architecture reference and the interactive vend simulator.
 </footer>
