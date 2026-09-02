@@ -297,7 +297,7 @@
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.7.0</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-7.8.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -356,8 +356,8 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
     <tr><td>132</td><td>CASH SALE (13 05)</td><td>ACK</td><td>fixed (price + item captured)</td></tr>
     <tr><td>133</td><td>POLL (12), idle</td><td>ACK</td><td>fixed</td></tr>
     <tr><td>134</td><td>EXPANSION, other subcommand</td><td>(varies)</td><td>&mdash;</td></tr>
-    <tr><td>190</td><td>other peripheral (outside 10&ndash;17)</td><td>(ignored)</td><td>&mdash;</td></tr>
-    <tr><td>199</td><td>unrecognized in current state</td><td>(none)</td><td>&mdash;</td></tr>
+    <tr><td>135</td><td>other peripheral (outside 10&ndash;17)</td><td>(ignored)</td><td>&mdash;</td></tr>
+    <tr><td>136</td><td>unrecognized in current state</td><td>(none)</td><td>&mdash;</td></tr>
   </tbody>
 </table>
   </section>
@@ -863,7 +863,7 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
 </main>
 
 <footer>
-  CM30 MDB Slave project. Current as of app v2.13.7 (build 55) / hardware-lib 7.7.0 / mqtt-lib 2.0.0: compact RabbahLog codebook envelope, generic RabbahMqtt API, broker auth, backend-contract topic suffixes, retained online/offline presence (birth + LWT), two-thread timing
+  CM30 MDB Slave project. Current as of app v2.13.7 (build 55) / hardware-lib 7.8.0 / mqtt-lib 2.0.0: compact RabbahLog codebook envelope, generic RabbahMqtt API, broker auth, backend-contract topic suffixes, retained online/offline presence (birth + LWT), two-thread timing
   engine (bus + offload), JUST RESET consumed once setup starts, order-independent setup retries,
   REVALUE handling, and variable-length BEGIN SESSION payloads. Handshakes and bit layouts
   verified against the MDB/ICP v4.3 specification and against real machine traces.
