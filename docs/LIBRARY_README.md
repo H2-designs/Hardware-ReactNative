@@ -4,7 +4,7 @@ Two fully decoupled Android libraries extracted from the proven MDB Slave app:
 
 | Artifact | What it is |
 |---|---|
-| `hardware-lib-7.8.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
+| `hardware-lib-7.9.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
 | `mqtt-lib-2.0.0.aar` | MQTT 3.1.1 transport (queue + publisher thread + auto-reconnect, broker **username/password** auth, retained presence/LWT, **connection-state listener**) **plus the Rabbah compact-log layer**: `RabbahLog`, the unified MDB/INFO codebooks, and `RabbahMqtt` (send/receive logs, text or JSON on any topic — zero MDB involvement). |
 | `CM30-HardwareLibrary-1.0.9.aar` | The CM30 vendor serial driver (hardware-lib needs it at runtime; AARs do not nest). |
 
@@ -54,7 +54,7 @@ fully offline.
 
 > Migration note: the Kotlin package is still `com.rabbah.mdb` and a deprecated
 > `typealias MdbLib = HardwareLib` keeps old code compiling — the only hard change is the
-> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.8.0.aar`) and that MQTT
+> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.9.0.aar`) and that MQTT
 > forwarding now needs the bridge attached.
 
 ## The CMD code schema
@@ -244,6 +244,12 @@ val ok = PulseLib.sendPulse(pulseWidthMs = 50, pulsePeriodMs = 100, count = 3)
   HIGH-pulse mode sends `PULSE_DIR_POSITIVE`, LOW-pulse mode `PULSE_DIR_NEGATIVE`. The call is
   issued from a dedicated `PulseWorker` thread at URGENT_AUDIO priority - trains run one at a
   time, in order, never delayed by app work.
+- **Ready feedback (7.9.0).** `setReadyFeedback(expectedValue, channel = 0)` arms a gate
+  from the backend model: before every train, `digital_in_get_value(channel)` must equal the
+  expected value or the pulse is refused (`[pulse] sendPulse rejected - machine not ready`).
+  Pass `null` (machine does not support ready feedback) and pulses are always allowed.
+  `isMachineReady()` runs the same check on demand and logs expected/actual/ready. Dashboard:
+  `setReadyFeedback:0` / `setReadyFeedback:0,1` / `setReadyFeedback:off`, `checkMachineReady`.
 - **`sendPulse` blocks until the train finishes** (~ period × count) and returns true only if
   every pulse went out — call it from a coroutine/background thread, never the UI thread. The
   worker's priority does the timing; your thread just waits for the answer.
@@ -363,7 +369,7 @@ status line, and an `inbox` subscription you can hit with `mosquitto_pub`.
 Preferred: consume the modules directly (`implementation project(':hardware-lib')`,
 `project(':mqtt-lib')`) — see the demo `app/`.
 
-If consuming raw AARs instead: add `hardware-lib-7.8.0.aar`, `mqtt-lib-2.0.0.aar`, **and**
+If consuming raw AARs instead: add `hardware-lib-7.9.0.aar`, `mqtt-lib-2.0.0.aar`, **and**
 `CM30-HardwareLibrary-1.0.9.aar` (hardware-lib needs it at runtime; AARs do not nest). If you
 skip MQTT entirely, `hardware-lib` + the CM30 AAR alone are enough.
 

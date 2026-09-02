@@ -289,6 +289,16 @@ class MdbRnModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod fun vendorPulse(p1: Int, p2: Int, p3: Int, p4: Int, promise: Promise) =
         promise.resolve(com.rabbah.mdb.PulseLib.vendorPulse(p1, p2, p3, p4))
 
+    /** Ready-feedback gate from the backend model: pulses are refused unless
+     * digital_in_get_value(channel) equals expectedValue. Pass expectedValue = -1 to disable
+     * (machine without ready feedback - pulses always allowed). */
+    @ReactMethod fun setReadyFeedback(expectedValue: Int, channel: Int, promise: Promise) =
+        promise.resolve(com.rabbah.mdb.PulseLib.setReadyFeedback(if (expectedValue < 0) null else expectedValue, channel))
+
+    /** Runs the ready-feedback check now: true = machine ready to accept pulses. */
+    @ReactMethod fun isMachineReady(promise: Promise) =
+        promise.resolve(com.rabbah.mdb.PulseLib.isMachineReady())
+
     /** Pulse state snapshot: { initialized, highPulse, pendingTrains }. */
     @ReactMethod fun getPulseState(promise: Promise) {
         val map = Arguments.createMap()

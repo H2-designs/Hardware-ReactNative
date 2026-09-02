@@ -115,6 +115,12 @@ const Mdb = {
   sendPulse: (pulseWidthMs, pulsePeriodMs, count) => MdbRn.sendPulse(pulseWidthMs, pulsePeriodMs, count),
   /** Raw vendor digital_out_pulse(p1,p2,p3,p4) passthrough - experiments only. */
   vendorPulse: (p1, p2, p3, p4) => MdbRn.vendorPulse(p1, p2, p3, p4),
+  /** Ready-feedback gate: pulses refused unless digital_in(channel) == expectedValue.
+   * Pass null/undefined expectedValue to disable (machine without ready feedback). */
+  setReadyFeedback: (expectedValue, channel = 0) =>
+    MdbRn.setReadyFeedback(expectedValue ?? -1, channel),
+  /** true = machine ready to accept pulses (runs the digital-in check now). */
+  isMachineReady: () => MdbRn.isMachineReady(),
   /** { initialized, highPulse, pendingTrains } */
   getPulseState: () => MdbRn.getPulseState(),
 
