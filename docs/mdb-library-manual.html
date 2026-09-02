@@ -128,14 +128,14 @@
     The complete developer manual for <code class="cmd">hardware-lib</code> and
     <code class="cmd">mqtt-lib</code>: every function with a working example, every dashboard
     command, and what actually happens inside when you call each one. Current as of
-    hardware-lib&nbsp;7.6.1 / mqtt-lib&nbsp;2.0.0.
+    hardware-lib&nbsp;7.7.0 / mqtt-lib&nbsp;2.0.0.
   </p>
 
 
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.6.1</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-7.7.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -224,6 +224,12 @@ HardwareLib.addControlListener / removeControlListener</pre>
     second of launch. The boot banner also prints <code>HardwareLib.VERSION</code>, catching a
     stale bundled AAR in one glance. Dashboard equivalent: the command
     <code>simulateExchange:10 10</code> (any hex works).</p>
+    <p><strong>Empty-session suppression (7.7.0):</strong> in AUTO session mode the machine
+    cycles BEGIN SESSION &rarr; SESSION COMPLETE &rarr; END SESSION endlessly with no customer.
+    Those cycles now log NOTHING by default - the BEGIN event is held back and delivered only
+    when a VEND REQUEST arrives in that session, so a real transaction still logs its complete
+    chain in order. Toggle with <code>setEmptySessionVisibility:on|off</code> (or
+    <code>HardwareLib.setEmptySessionVisibility(true)</code>) to see every cycle again.</p>
     <p><strong>The CMD code schema.</strong> Every exchange carries one stable integer code
     (<code>MdbCmd</code>, append-only). Edit a reply by number with
     <code>setReplyHex(code, hex)</code> / read it with <code>getReplyHex(code)</code>; the last
@@ -269,7 +275,7 @@ HardwareLib.addControlListener / removeControlListener</pre>
     <p>Add the AARs (or the Gradle modules) and initialize once at app startup:</p>
     <pre class="code"><span class="c">// build.gradle (raw AARs; skip if using the Gradle modules directly)</span>
 implementation files(<span class="s">'libs/mqtt-lib-2.0.0.aar'</span>)
-implementation files(<span class="s">'libs/hardware-lib-7.6.1.aar'</span>)
+implementation files(<span class="s">'libs/hardware-lib-7.7.0.aar'</span>)
 implementation files(<span class="s">'libs/CM30-HardwareLibrary-1.0.9.aar'</span>)  <span class="c">// hardware-lib's hardware runtime</span></pre>
 
     <pre class="code"><span class="c">// In your Application class or first Activity - the whole startup:</span>
@@ -755,6 +761,6 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
 </main>
 
 <footer>
-  CM30 MDB Slave project — developer manual. hardware-lib 7.6.1 · mqtt-lib 2.0.0 · demo app v2.13.16
+  CM30 MDB Slave project — developer manual. hardware-lib 7.7.0 · mqtt-lib 2.0.0 · demo app v2.13.18
   (build 54). Companion docs: the architecture reference and the interactive vend simulator.
 </footer>

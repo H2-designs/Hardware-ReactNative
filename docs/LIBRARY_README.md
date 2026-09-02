@@ -4,7 +4,7 @@ Two fully decoupled Android libraries extracted from the proven MDB Slave app:
 
 | Artifact | What it is |
 |---|---|
-| `hardware-lib-7.6.1.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
+| `hardware-lib-7.7.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
 | `mqtt-lib-2.0.0.aar` | MQTT 3.1.1 transport (queue + publisher thread + auto-reconnect, broker **username/password** auth, retained presence/LWT, **connection-state listener**) **plus the Rabbah compact-log layer**: `RabbahLog`, the unified MDB/INFO codebooks, and `RabbahMqtt` (send/receive logs, text or JSON on any topic — zero MDB involvement). |
 | `CM30-HardwareLibrary-1.0.9.aar` | The CM30 vendor serial driver (hardware-lib needs it at runtime; AARs do not nest). |
 
@@ -54,7 +54,7 @@ fully offline.
 
 > Migration note: the Kotlin package is still `com.rabbah.mdb` and a deprecated
 > `typealias MdbLib = HardwareLib` keeps old code compiling — the only hard change is the
-> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.6.1.aar`) and that MQTT
+> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.7.0.aar`) and that MQTT
 > forwarding now needs the bridge attached.
 
 ## The CMD code schema
@@ -363,7 +363,7 @@ status line, and an `inbox` subscription you can hit with `mosquitto_pub`.
 Preferred: consume the modules directly (`implementation project(':hardware-lib')`,
 `project(':mqtt-lib')`) — see the demo `app/`.
 
-If consuming raw AARs instead: add `hardware-lib-7.6.1.aar`, `mqtt-lib-2.0.0.aar`, **and**
+If consuming raw AARs instead: add `hardware-lib-7.7.0.aar`, `mqtt-lib-2.0.0.aar`, **and**
 `CM30-HardwareLibrary-1.0.9.aar` (hardware-lib needs it at runtime; AARs do not nest). If you
 skip MQTT entirely, `hardware-lib` + the CM30 AAR alone are enough.
 
@@ -417,6 +417,7 @@ is reported back in `SETTINGS_JSON:` so a watching dashboard always shows the re
 | `HardwareLib.setMqttLogging(Boolean)` / `isMqttLoggingEnabled` | `setMqttLogging:on\|off` | Gate the remote log stream (`publishRemote` on events + the "LOG" control tag) — local listeners and the control plane keep working while muted |
 | `HardwareLib.setPollVisibility(Boolean)` | `setPollVisibility:on\|off` | Log-debug: show idle POLL/ACK |
 | `HardwareLib.setUnhandledVisibility(Boolean)` | `setUnhandledVisibility:on\|off` | Log-debug: show commands addressed to us we could not answer |
+| `HardwareLib.setEmptySessionVisibility(Boolean)` | `setEmptySessionVisibility:on|off` | Log empty (no-vend) session cycles. OFF by default: auto-session mode churns BEGIN/COMPLETE/END every re-arm with no customer - while off those cycles log NOTHING, and a session that gets a VEND REQUEST logs its full chain (BEGIN included, delivered at vend time). |
 | `HardwareLib.setPeripheralVisibility(Boolean)` | `setPeripheralVisibility:on\|off` | Log-debug: show bus traffic addressed to OTHER peripherals (coin changer, bill validator). Separate from unhandled. The dashboard also has a client-side "Cashless only" filter. |
 | `HardwareLib.handleCommand(text): Boolean` | — | Feed ANY transport's received text in; consumes what it recognizes |
 | `HardwareLib.vendListener / logListener / statusListener / stateListener / exchangeListener / controlListener` | — | The full listener surface (see table above) |
