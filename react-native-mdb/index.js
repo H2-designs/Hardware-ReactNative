@@ -116,9 +116,14 @@ const Mdb = {
   /** Raw vendor digital_out_pulse(p1,p2,p3,p4) passthrough - experiments only. */
   vendorPulse: (p1, p2, p3, p4) => MdbRn.vendorPulse(p1, p2, p3, p4),
   /** Ready-feedback gate: pulses refused unless digital_in(channel) == expectedValue.
-   * Pass null/undefined expectedValue to disable (machine without ready feedback). */
-  setReadyFeedback: (expectedValue, channel = 0) =>
-    MdbRn.setReadyFeedback(expectedValue ?? -1, channel),
+   * Two call shapes:
+   *   setReadyFeedback(model.supportReadyFeedback, model.readyFeedbackValue)  // dashboard flag
+   *   setReadyFeedback(0)            // value only (gate armed), null/undefined = disabled
+   * supported=false or a null value disables the gate (pulses always allowed). */
+  setReadyFeedback: (a, b, channel = 0) => {
+    if (typeof a === 'boolean') return MdbRn.setReadyFeedback(a && b != null ? b : -1, channel);
+    return MdbRn.setReadyFeedback(a ?? -1, b ?? 0);
+  },
   /** true = machine ready to accept pulses (runs the digital-in check now). */
   isMachineReady: () => MdbRn.isMachineReady(),
   /** { initialized, highPulse, pendingTrains } */

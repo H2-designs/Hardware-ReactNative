@@ -77,6 +77,7 @@ declare const Mdb: {
   sendPulse(pulseWidthMs: number, pulsePeriodMs: number, count: number): Promise<boolean>;
   vendorPulse(p1: number, p2: number, p3: number, p4: number): Promise<boolean>;
   setReadyFeedback(expectedValue: number | null, channel?: number): Promise<boolean>;
+  setReadyFeedback(supported: boolean, expectedValue: number | null, channel?: number): Promise<boolean>;
   isMachineReady(): Promise<boolean>;
   getPulseState(): Promise<{ initialized: boolean; highPulse: boolean; pendingTrains: number }>;
 
