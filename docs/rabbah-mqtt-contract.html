@@ -258,8 +258,8 @@ RabbahMqtt.sendJson(<span class="s">"cmd/progress"</span>, progress)      <span 
     </p>
 
     <h3><span class="pill in">IN</span> <code class="cmd">devices/D-0123/logs</code> - single log</h3>
-    <pre class="code"><span class="c">// a vend request as the device ships it (schema MDB, code 13 = MDB_VEND_REQUEST):</span>
-{<span class="s">"t"</span>:<span class="s">"1787743651002"</span>,<span class="s">"s"</span>:<span class="s">"MDB"</span>,<span class="s">"m"</span>:<span class="s">"13"</span>,<span class="s">"a"</span>:<span class="s">"vending-app"</span>,<span class="s">"v"</span>:<span class="s">"2.13.6"</span>,
+    <pre class="code"><span class="c">// a vend request as the device ships it (schema MDB, code 121 = MDB_VEND_REQUEST (mqtt-lib 2.4.0+; older builds emitted 13 - getCodebook is the source of truth)):</span>
+{<span class="s">"t"</span>:<span class="s">"1787743651002"</span>,<span class="s">"s"</span>:<span class="s">"MDB"</span>,<span class="s">"m"</span>:<span class="s">"121"</span>,<span class="s">"a"</span>:<span class="s">"vending-app"</span>,<span class="s">"v"</span>:<span class="s">"2.13.6"</span>,
  <span class="s">"k"</span>:<span class="s">"i"</span>,<span class="s">"i"</span>:<span class="s">"7c1f2a9b"</span>,<span class="s">"d"</span>:1,<span class="s">"p"</span>:[<span class="s">"13 00 01 5E 00 0C 78"</span>,<span class="s">"ACK"</span>,<span class="s">"350"</span>,<span class="s">"12"</span>]}
 
 <span class="c">// a free-text app log (schema INFO, code 0 = INFO_RAW):</span>
@@ -269,8 +269,8 @@ RabbahMqtt.sendJson(<span class="s">"cmd/progress"</span>, progress)      <span 
     <h3><span class="pill in">IN</span> <code class="cmd">devices/D-0123/logs/bulk</code> - batched logs</h3>
     <pre class="code"><span class="c">// a JSON array of the same items, oldest first:</span>
 [
-  {<span class="s">"t"</span>:<span class="s">"1787743650120"</span>,<span class="s">"s"</span>:<span class="s">"MDB"</span>,<span class="s">"m"</span>:<span class="s">"8"</span>, <span class="s">"a"</span>:<span class="s">"vending-app"</span>,<span class="s">"v"</span>:<span class="s">"2.13.6"</span>,<span class="s">"k"</span>:<span class="s">"i"</span>,<span class="s">"i"</span>:<span class="s">"7c1f2a9b"</span>,<span class="s">"d"</span>:1,<span class="s">"p"</span>:[<span class="s">"12 12"</span>,<span class="s">"03 FF FF 00 00 00 01 00 00 00"</span>]},
-  {<span class="s">"t"</span>:<span class="s">"1787743651002"</span>,<span class="s">"s"</span>:<span class="s">"MDB"</span>,<span class="s">"m"</span>:<span class="s">"13"</span>,<span class="s">"a"</span>:<span class="s">"vending-app"</span>,<span class="s">"v"</span>:<span class="s">"2.13.6"</span>,<span class="s">"k"</span>:<span class="s">"i"</span>,<span class="s">"i"</span>:<span class="s">"7c1f2a9b"</span>,<span class="s">"d"</span>:1,<span class="s">"p"</span>:[<span class="s">"13 00 01 5E 00 0C 78"</span>,<span class="s">"ACK"</span>,<span class="s">"350"</span>,<span class="s">"12"</span>]}
+  {<span class="s">"t"</span>:<span class="s">"1787743650120"</span>,<span class="s">"s"</span>:<span class="s">"MDB"</span>,<span class="s">"m"</span>:<span class="s">"120"</span>, <span class="s">"a"</span>:<span class="s">"vending-app"</span>,<span class="s">"v"</span>:<span class="s">"2.13.6"</span>,<span class="s">"k"</span>:<span class="s">"i"</span>,<span class="s">"i"</span>:<span class="s">"7c1f2a9b"</span>,<span class="s">"d"</span>:1,<span class="s">"p"</span>:[<span class="s">"12 12"</span>,<span class="s">"03 FF FF 00 00 00 01 00 00 00"</span>]},
+  {<span class="s">"t"</span>:<span class="s">"1787743651002"</span>,<span class="s">"s"</span>:<span class="s">"MDB"</span>,<span class="s">"m"</span>:<span class="s">"121"</span>,<span class="s">"a"</span>:<span class="s">"vending-app"</span>,<span class="s">"v"</span>:<span class="s">"2.13.6"</span>,<span class="s">"k"</span>:<span class="s">"i"</span>,<span class="s">"i"</span>:<span class="s">"7c1f2a9b"</span>,<span class="s">"d"</span>:1,<span class="s">"p"</span>:[<span class="s">"13 00 01 5E 00 0C 78"</span>,<span class="s">"ACK"</span>,<span class="s">"350"</span>,<span class="s">"12"</span>]}
 ]
 
 <span class="c">// device side:  RabbahMqtt.sendJson("logs/bulk", batchArrayAsString)</span></pre>
@@ -317,7 +317,7 @@ mosquitto_pub -h YOUR-SERVER -u rabbah -P '...' -t 'devices/D-0123/cmd' -m 'ping
 </main>
 
 <footer>
-  Rabbah platform — device ⇄ backend MQTT contract, as provided by the backend team. Device side implemented in mqtt-lib 1.3.0 (configurable suffixes + retained presence). Companion
+  Rabbah platform — device ⇄ backend MQTT contract, as provided by the backend team. Device side implemented in mqtt-lib (current: 2.4.0 - configurable suffixes, retained presence, passthrough operator channel, auto-attach, unified MDB 110-136 / RS232 137-143 log codes). Companion
   docs: the MDB library manual (device-side API) and the MDB Slave architecture reference.
   Dongle command payload per RHT-924.
 </footer>

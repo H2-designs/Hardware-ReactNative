@@ -235,14 +235,18 @@
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.10.0</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-7.17.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
     <code>typealias MdbLib = HardwareLib</code> keeps existing code compiling.</p>
-    <p>The MQTT wiring that used to be automatic now lives in a ~30-line app-side bridge
+    <p>The MQTT wiring lives in a ~30-line app-side bridge
     (<code>MdbMqttBridge.kt</code>, shipped in <code>samples/</code>) that reproduces the old wire
-    format <em>byte-identically</em> &mdash; the dashboard needs zero changes:</p>
+    format <em>byte-identically</em> &mdash; the dashboard needs zero changes.
+    <strong>Since mqtt-lib 2.3.0 even this is optional</strong>: the first successful broker
+    connection auto-runs <code>HardwareLib.attachRabbahMqtt()</code>
+    (<code>MqttConfig.autoAttachHardware</code>, default true), so swapping in the two current
+    AARs is the entire integration &mdash; the explicit bridge remains for custom wiring:</p>
     <pre class="code"><span class="c">// the whole bridge - attach BEFORE HardwareLib.init():</span>
 MqttLib.addCommandListener { HardwareLib.handleCommand(it) }        <span class="c">// commands in</span>
 HardwareLib.controlListener = { tag, payload -&gt;                     <span class="c">// control plane out</span>
@@ -737,14 +741,22 @@ HardwareLib.vendListener = <span class="k">object</span> : HardwareLib.VendListe
   <section id="api">
     <h2><span class="eyebrow">07 — the contract</span>Public API, as shipped</h2>
 
-    <h3>mqtt-lib (2.0.0)</h3>
+    <h3>mqtt-lib (2.4.0)</h3>
     <pre class="code"><span class="k">class</span> MqttConfig(
-    <span class="k">val</span> topicPrefix: String,              <span class="c">// e.g. "cm30-mdb/hamdan-rabbah"</span>
-    <span class="k">val</span> deviceId: String,                 <span class="c">// shown on-screen; separates machines</span>
-    <span class="k">val</span> brokerHost: String = <span class="s">"the Rabbah mosquitto"</span>,
+    <span class="k">val</span> topicPrefix: String,              <span class="c">// fleet contract: "devices"</span>
+    <span class="k">val</span> deviceId: String,                 <span class="c">// device code; separates machines</span>
+    <span class="k">val</span> brokerHost: String = <span class="s">"mosquitto"</span>, <span class="c">// real devices: the reachable host</span>
     <span class="k">val</span> brokerPort: Int = <span class="s">1883</span>,
-    <span class="k">val</span> keepAliveSec: Int = <span class="s">30</span>,
-    <span class="k">val</span> queueCapacity: Int = <span class="s">1000</span>
+    <span class="k">val</span> keepAliveSec: Int = <span class="s">30</span>,          <span class="c">// broker declares device dead after ~1.5x</span>
+    <span class="k">val</span> queueCapacity: Int = <span class="s">1000</span>,
+    <span class="k">val</span> username: String? = <span class="k">null</span>,        <span class="c">// broker auth</span>
+    <span class="k">val</span> password: String? = <span class="k">null</span>,
+    <span class="k">val</span> clientId: String? = <span class="k">null</span>,        <span class="c">// null = deviceId + millis (unique)</span>
+    <span class="k">val</span> logTopicSuffix: String = <span class="s">"liveLog"</span>,      <span class="c">// fleet: "logs"</span>
+    <span class="k">val</span> commandTopicSuffix: String = <span class="s">"commands"</span>, <span class="c">// fleet: "cmd" (backend-owned)</span>
+    <span class="k">val</span> statusTopicSuffix: String? = <span class="k">null</span>,       <span class="c">// fleet: "status" (retained presence + LWT)</span>
+    <span class="k">val</span> passthroughTopicSuffix: String? = <span class="s">"passthrough"</span>, <span class="c">// operator/dashboard channel (2.1.0)</span>
+    <span class="k">val</span> autoAttachHardware: Boolean = <span class="k">true</span>       <span class="c">// 2.3.0: wire hardware-lib on first connect</span>
 )
 
 <span class="k">object</span> MqttLib {
@@ -758,7 +770,7 @@ HardwareLib.vendListener = <span class="k">object</span> : HardwareLib.VendListe
     <span class="k">val</span> droppedMessages: Long                             <span class="c">// queue-overflow counter</span>
 }</pre>
 
-    <h3>hardware-lib (6.4.1)</h3>
+    <h3>hardware-lib (7.17.0)</h3>
     <pre class="code"><span class="k">object</span> HardwareLib {
     <span class="k">fun</span> init(context: Context)   <span class="c">// MQTT optional: without it HardwareLib runs fully offline</span>
     <span class="k">fun</span> start() / stop()         <span class="c">// open/close the MDB port + worker loop</span>
@@ -831,13 +843,18 @@ HardwareLib.vendListener = <span class="k">object</span> : HardwareLib.VendListe
         <tr><td class="mono">HardwareLib.currentSettingsJson()</td><td class="mono">getSettings</td></tr>
         <tr><td class="mono">MdbConfigStore.applyJson / set / resetToDefault / snapshotJson</td><td class="mono">config JSON / setConfig: / resetConfig: / getConfig</td></tr>
         <tr><td class="mono">MqttLib.isConnected</td><td class="mono">ping (answered PONG by mqtt-lib)</td></tr>
+        <tr><td class="mono">MqttLib.VERSION + HardwareLib.VERSION</td><td class="mono">version (mqtt-lib 2.3.0 - reports both bundled versions)</td></tr>
+        <tr><td class="mono">HardwareLib.attachRabbahMqtt()</td><td class="mono">attachHardware (mqtt-lib 2.3.0 - also auto on first connect; dashboard button "Attach HW")</td></tr>
       </tbody>
     </table></div>
 
     <h3>The whole integration</h3>
-    <pre class="code"><span class="c">// once, at startup:</span>
-MqttLib.init(MqttConfig(topicPrefix = <span class="s">"cm30-mdb/hamdan-rabbah"</span>, deviceId = myDeviceId))
-MqttLib.start()
+    <pre class="code"><span class="c">// once, at startup (fleet contract):</span>
+MqttLib.init(MqttConfig(topicPrefix = <span class="s">"devices"</span>, deviceId = deviceCode,
+    brokerHost = BuildConfig.MQTT_HOST, username = BuildConfig.MQTT_USERNAME,
+    password = BuildConfig.MQTT_PASSWORD,
+    logTopicSuffix = <span class="s">"logs"</span>, commandTopicSuffix = <span class="s">"cmd"</span>, statusTopicSuffix = <span class="s">"status"</span>))
+MqttLib.start()   <span class="c">// 2.3.0: first connect auto-attaches hardware-lib - no bridge code needed</span>
 HardwareLib.init(applicationContext)   <span class="c">// applicationContext: app-lifetime Context, for SharedPreferences</span>
 HardwareLib.start()
 <span class="c">// MDB data now flows to the dashboard; all remote commands work. Add the VendListener above</span>
@@ -861,8 +878,8 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
 
     <div class="callout">
       <p>
-        <strong>Artifacts:</strong> <code class="cmd">mqtt-lib-2.0.0.aar</code>,
-        <code class="cmd">hardware-lib-7.10.0.aar</code> (plus the bundled CM30 vendor .aar as its
+        <strong>Artifacts:</strong> <code class="cmd">mqtt-lib-2.3.0.aar</code>,
+        <code class="cmd">hardware-lib-7.17.0.aar</code> (plus the bundled CM30 vendor .aar as its
         runtime dependency), the demo APK as the reference integration, and
         <code class="cmd">LIBRARY_README.md</code> for the integrating developer. Wire protocol
         unchanged throughout — the existing <code class="cmd">log-viewer.html</code> dashboard
@@ -873,6 +890,7 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
 </main>
 
 <footer>
-  CM30 MDB Slave project — library architecture, as built. Current as of hardware-lib 7.10.0 /
-  mqtt-lib 2.0.0 (demo app v2.13.7, build 55).
+  CM30 MDB Slave project — library architecture, as built. Current as of hardware-lib 7.17.0 /
+  mqtt-lib 2.4.0 (demo app v2.13.36, build 84): auto-attach on connect, attachHardware/version
+  built-ins, passthrough operator channel, retained presence, RS232 + Pulse engines.
 </footer>

@@ -1,4 +1,4 @@
-buildscript {
+﻿buildscript {
     // Only used when this module is opened standalone; inside an RN app the root project
     // already provides AGP + Kotlin.
     repositories { google(); mavenCentral() }
@@ -54,7 +54,7 @@ repositories {
 dependencies {
     implementation 'com.facebook.react:react-android'
     api(name: 'hardware-lib-7.17.0', ext: 'aar')
-    api(name: 'mqtt-lib-2.2.0', ext: 'aar')
+    api(name: 'mqtt-lib-2.4.0', ext: 'aar')
     // The CM30 vendor hardware runtime hardware-lib talks to on the real terminal.
     api(name: 'CM30-HardwareLibrary-1.0.9', ext: 'aar')
 }

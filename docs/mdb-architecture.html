@@ -297,14 +297,19 @@
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.10.0</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-7.17.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
     <code>typealias MdbLib = HardwareLib</code> keeps existing code compiling.</p>
-    <p>The MQTT wiring that used to be automatic now lives in a ~30-line app-side bridge
+    <p>The MQTT wiring lives in a ~30-line app-side bridge
     (<code>MdbMqttBridge.kt</code>, shipped in <code>samples/</code>) that reproduces the old wire
-    format <em>byte-identically</em> &mdash; the dashboard needs zero changes:</p>
+    format <em>byte-identically</em> &mdash; the dashboard needs zero changes. <strong>Since
+    mqtt-lib 2.3.0 even this is optional</strong>: on the first successful broker connection
+    mqtt-lib reflectively runs <code>HardwareLib.attachRabbahMqtt()</code>
+    (<code>MqttConfig.autoAttachHardware</code>, default true), wiring commands, logs and the
+    coded RS232 events with zero app code &mdash; swapping in the two current AARs is the entire
+    integration. The explicit bridge below remains for apps that want custom wiring:</p>
     <pre class="code"><span class="c">// the whole bridge - attach BEFORE HardwareLib.init():</span>
 MqttLib.addCommandListener { HardwareLib.handleCommand(it) }        <span class="c">// commands in</span>
 HardwareLib.controlListener = { tag, payload -&gt;                     <span class="c">// control plane out</span>
@@ -408,6 +413,8 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
         <tr><td class="mono">setPollVisibility / setUnhandledVisibility / setPeripheralVisibility :on|off</td><td>Three independent log-debug switches: idle POLL→ACK, commands addressed to us we could not answer, and traffic addressed to OTHER peripherals (coin changer, bill validator). Separate flags so "cashless + unhandled only" is a real combination; none of them ever touch the on-device screen (see performance note below). The dashboard adds its own client-side "Cashless only" filter on top, which works with any device build.</td></tr>
         <tr><td class="mono">getCodebook</td><td>Requests the CODEBOOK_JSON decode dictionary above.</td></tr>
         <tr><td class="mono">getSettings / getConfig / ping</td><td>Request the corresponding tagged message above.</td></tr>
+        <tr><td class="mono">version</td><td>mqtt-lib 2.3.0 built-in — reports the mqtt-lib and hardware-lib versions actually running, answered by mqtt-lib itself (works even when hardware-lib is unwired).</td></tr>
+        <tr><td class="mono">attachHardware</td><td>mqtt-lib 2.3.0 built-in — wires hardware-lib's commands + logs on demand (the same attach that runs automatically on first connect); replies with success or the reason it can't.</td></tr>
         <tr><td class="mono">setConfig:NAME:hex / resetConfig:NAME</td><td>Edit or reset one wire payload in MdbConfig. Length-validated on the device; the device's own ack line ("NAME updated → …" or a specific error) is what the PC shows — success is never assumed.</td></tr>
       </tbody>
     </table></div>
@@ -545,7 +552,7 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
       </tbody>
     </table></div>
     <p>
-      The 27 MDB event codes plus INFO_RAW live in <code class="cmd">RabbahLogEvent.kt</code>;
+      The 27 MDB event codes (110&ndash;136 since mqtt-lib 2.4.0 &mdash; unified with the MdbCmd exchange codes; older builds emitted 0&ndash;26) plus INFO_RAW live in <code class="cmd">RabbahLogEvent.kt</code>;
       <code class="cmd">RabbahCodebook.json()</code> serves the whole dictionary on request
       (<code class="cmd">getCodebook</code>), and both the on-device screen and the dashboard
       render through the identical <code class="cmd">format()</code> substitution — the two can
@@ -571,7 +578,7 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
       app: on-screen broker settings, log/telemetry/burst buttons, a live queued/sent/dropped
       line, and an <code class="cmd">inbox</code> subscription.
     </p>
-    <h3>Backend contract: suffixes &amp; presence (mqtt-lib 2.0.0)</h3>
+    <h3>Backend contract: suffixes &amp; presence (mqtt-lib 2.2.0+)</h3>
     <p>
       The two built-in channels are configurable: <code class="cmd">logTopicSuffix</code>
       (default <code class="cmd">liveLog</code>) and <code class="cmd">commandTopicSuffix</code>
@@ -585,6 +592,24 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
       graceful <code class="cmd">stop()</code> publishing <code class="cmd">offline</code>
       itself. The CONNECT wire format (auth + Will) is verified byte-for-byte against a real
       mosquitto. Defaults keep the pre-1.3.0 behavior exactly.
+    </p>
+    <p>
+      Two additions complete the fleet contract. <strong>Passthrough (2.1.0)</strong>:
+      <code class="cmd">passthroughTopicSuffix</code> (default
+      <code class="cmd">passthrough</code>) subscribes a SECOND command channel
+      <code class="cmd">devices/{deviceCode}/passthrough</code> on the same listener chain —
+      operator/dashboard commands stay separate from the backend-owned
+      <code class="cmd">cmd</code>/ack/progress flow; the desktop dashboard publishes ALL its
+      commands there. <strong>Auto-attach + built-ins (2.3.0)</strong>: mqtt-lib answers
+      <code class="cmd">ping</code> (<code class="cmd">PONG</code>),
+      <code class="cmd">version</code> (the mqtt-lib + hardware-lib versions actually bundled)
+      and <code class="cmd">attachHardware</code> (wire hardware-lib on demand) BY ITSELF —
+      before the listener chain — and auto-attaches hardware-lib on the first connection
+      (<code class="cmd">MqttConfig.autoAttachHardware</code>, default true). Field rule: a
+      device that answers ping but calls everything else
+      <code class="cmd">unknown command</code> has mqtt-lib alive and hardware-lib unwired —
+      send <code class="cmd">version</code>, then <code class="cmd">attachHardware</code>
+      (dashboard toolbar buttons exist for both).
     </p>
   </section>
 
@@ -863,7 +888,7 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
 </main>
 
 <footer>
-  CM30 MDB Slave project. Current as of app v2.13.7 (build 55) / hardware-lib 7.10.0 / mqtt-lib 2.0.0: compact RabbahLog codebook envelope, generic RabbahMqtt API, broker auth, backend-contract topic suffixes, retained online/offline presence (birth + LWT), two-thread timing
+  CM30 MDB Slave project. Current as of app v2.13.36 (build 84) / hardware-lib 7.17.0 / mqtt-lib 2.4.0: auto-attach + attachHardware/version built-ins, passthrough operator channel, compact RabbahLog codebook envelope (MDB 110–136 + RS232 137–143, one unified code space since mqtt-lib 2.4.0), generic RabbahMqtt API, broker auth, backend-contract topic suffixes, retained online/offline presence (birth + LWT), two-thread timing
   engine (bus + offload), JUST RESET consumed once setup starts, order-independent setup retries,
   REVALUE handling, and variable-length BEGIN SESSION payloads. Handshakes and bit layouts
   verified against the MDB/ICP v4.3 specification and against real machine traces.

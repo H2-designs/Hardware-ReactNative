@@ -4,8 +4,8 @@ Two fully decoupled Android libraries extracted from the proven MDB Slave app:
 
 | Artifact | What it is |
 |---|---|
-| `hardware-lib-7.10.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
-| `mqtt-lib-2.0.0.aar` | MQTT 3.1.1 transport (queue + publisher thread + auto-reconnect, broker **username/password** auth, retained presence/LWT, **connection-state listener**) **plus the Rabbah compact-log layer**: `RabbahLog`, the unified MDB/INFO codebooks, and `RabbahMqtt` (send/receive logs, text or JSON on any topic — zero MDB involvement). |
+| `hardware-lib-7.17.0.aar` | **(renamed from mdb-lib)** The full MDB Cashless Device #1 slave (levels 1/2/3, config store, settings) for real CM30 hardware. **Contains NO networking of any kind** — everything it produces exits through listeners, everything it accepts enters through plain functions. Every exchange carries a stable integer **CMD code** (see the schema below). |
+| `mqtt-lib-2.4.0.aar` | MQTT 3.1.1 transport (queue + publisher thread + auto-reconnect, broker **username/password** auth, retained presence/LWT, **connection-state listener**) **plus the Rabbah compact-log layer**: `RabbahLog`, the unified MDB/INFO codebooks, and `RabbahMqtt` (send/receive logs, text or JSON on any topic — zero MDB involvement). |
 | `CM30-HardwareLibrary-1.0.9.aar` | The CM30 vendor serial driver (hardware-lib needs it at runtime; AARs do not nest). |
 
 ## Architecture — who talks to whom
@@ -54,14 +54,17 @@ fully offline.
 
 > Migration note: the Kotlin package is still `com.rabbah.mdb` and a deprecated
 > `typealias MdbLib = HardwareLib` keeps old code compiling — the only hard change is the
-> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.10.0.aar`) and that MQTT
+> gradle dependency (`project(':hardware-lib')` / `hardware-lib-7.17.0.aar`) and that MQTT
 > forwarding now needs the bridge attached.
 
 ## The CMD code schema
 
 Every exchange the engine handles has ONE stable integer code (`MdbCmd`, append-only — codes
 are never renumbered). `exchangeListener` delivers them live; the hex APIs address them by
-number.
+number. **Since mqtt-lib 2.4.0 these same codes are the log-envelope codes**: a RABBAH_LOG
+item with `"s":"MDB"` carries `"m":"110".."136"` exactly as tabled below (older builds emitted
+0–26 for the same events; `getCodebook` always serves what the running build emits). One code
+space end to end — MDB 110–136, RS232 137–143.
 
 | Code | VMC sends | We reply | Reply hex editable? | RX captured |
 |---|---|---|---|---|
@@ -214,15 +217,24 @@ otherwise.
 ## Integration — the whole thing
 
 ```kotlin
-// once, at startup (Application or first Activity):
-MqttLib.init(MqttConfig(topicPrefix = "cm30-mdb/hamdan-rabbah", deviceId = myDeviceId,
-                        brokerHost = "YOUR-SERVER", username = "rabbah", password = "…"))
+// once, at startup (Application or first Activity) - backend-contract topics:
+// devices/<id>/logs out, devices/<id>/passthrough in (operator commands; the backend owns
+// devices/<id>/cmd), retained online/offline presence on devices/<id>/status.
+MqttLib.init(MqttConfig(topicPrefix = "devices", deviceId = myDeviceId,
+                        brokerHost = "YOUR-SERVER", username = "rabbah", password = "…",
+                        logTopicSuffix = "logs", commandTopicSuffix = "cmd",
+                        statusTopicSuffix = "status"))   // passthrough subscribed automatically
 MqttLib.start()
 MdbMqttBridge.attach()                 // the glue (copy MdbMqttBridge.kt from app/)
 HardwareLib.init(applicationContext)
 HardwareLib.start()
 // Done. All MDB data flows to the dashboard; all remote commands work.
 ```
+
+Since mqtt-lib **2.1.0** every device also subscribes to a second command channel,
+`<prefix>/<deviceId>/passthrough` (`MqttConfig.passthroughTopicSuffix`, same listener chain) —
+that is where the dashboard sends ALL its commands, so operator traffic never mixes into the
+backend-owned `cmd` topic with its ack/progress flow.
 
 ## Pulse output — PulseLib (7.5.0)
 
@@ -285,25 +297,78 @@ Rs232Lib.vendRequestListener = { price, frame ->
 ```
 
 - **Matching**: rx is hex where `??` matches ANY byte (that is how a vend request whose price
-  bytes change per sale still matches one rule); frame length must equal the pattern length;
-  first matching rule wins. Frames are cut from the byte stream by silence (`frameGapMs`,
-  default 20 ms — RS232 has no frame markers).
-- **Vend request rules**: `priceHi`/`priceLo` name the byte POSITIONS (0-based) inside the
-  frame carrying the price high and low bytes — on match the price (hi × 256 + lo) is
-  extracted and `vendRequestListener(price, frameHex)` fires. Reply immediately via the
-  rule's `tx`, later via `sendHex(hex)`, or both.
+  bytes change per sale still matches one rule); a single trailing `*` matches ANY NUMBER of
+  remaining bytes for VARIABLE-LENGTH frames (`"F2 *"` matches every frame starting `F2`);
+  without `*` the frame length must equal the pattern length; first matching rule wins.
+  Frames are cut from the byte stream by silence (`frameGapMs`, default 1000 ms — RS232 has
+  no frame markers; the reply goes out this long after the machine's last byte. Tune live via
+  `rs232Gap:MS`, or lower `Rs232Lib.frameGapMs` for machines with a tight response window).
+- **Vend request rules** — two price formats, both using positions that are 0-based from the
+  frame START or NEGATIVE to count from the frame END (`-1` = last byte):
+  - **Binary** `priceHi`/`priceLo`: two bytes, price = hi × 256 + lo.
+    `{"name":"VEND","rx":"F2 *","tx":"06","priceHi":-3,"priceLo":-2}`
+  - **ASCII** `amountStart`/`amountEnd`: the price is digit TEXT inside the frame (common on
+    card-reader protocols — `31 35 30 30 30 30` = "150000" = 1500.00). `amountEnd` is
+    EXCLUSIVE, so `-1` = everything up to but not including the last byte (skips a trailing
+    CRC): `{"name":"PAYMENT","rx":"A0 01 *","tx":"","amountStart":4,"amountEnd":-1}`.
+  On match the price is extracted and `vendRequestListener(price, frameHex)` fires. Reply
+  immediately via the rule's `tx`, later via `sendHex(hex)`, or both.
+- **Framed replies with computed length + CRC**: `buildXorFrame(headerHex, dataHex)` builds
+  `[header][2-byte length][data][XOR CRC]` — the classic card-reader frame;
+  `sendXorFrame(headerHex, dataHex)` builds and sends it; `sendXorAscii(headerHex, text)`
+  does the same with an ASCII payload; `asciiHex(text)` converts "SUCCESS" → `53 55 43…`.
+  `Rs232Lib.sendXorAscii("A1 02", "SUCCESS")` sends `A1 02 00 07 53 55 43 43 45 53 53 E7`.
+- **Incoming CRC validation**: `setCrcCheck(true)` (persisted; read via `crcCheckEnabled`;
+  dashboard `rs232Crc:on|off`) — every received frame's last byte must equal the XOR of all
+  preceding bytes, and a frame that fails is DISCARDED with no reply and no listeners (per the
+  card-reader protocol), logging `[rs232] rx=… CRC FAIL (expected XX) - discarded`. Default off.
 - **API**: `open(baud, dataBits, stopBits, parity)` / `close()` / `isOpen`,
   `setRulesJson(json)` (null = ok, else the error text) / `rulesJson()` / `clearRules()`,
-  `sendHex(hex)`, `exchangeListener` (every frame: rxHex, ruleName, txHex, price),
-  `vendRequestListener(price, frameHex)`.
+  `sendHex(hex)`, `simulateFrame(hex)` (feeds a fake machine frame through the matcher — test
+  a rule table without hardware), `exchangeListener` (every frame: rxHex, ruleName, txHex,
+  price), `vendRequestListener(price, frameHex)`.
+- **RS232 codebook schema** (7.17.0 / mqtt-lib 2.2.0+): serial exchanges ship as coded
+  RABBAH_LOG items (schema `"RS232"`) instead of raw text — parseable by the backend exactly
+  like MDB. Codes (continue after the MDB CMD schema 110-136): 137 `RS232_RX_MATCHED` [rule, rx, tx|-, price], 138 `RS232_RX_UNMATCHED` [rx],
+  139 `RS232_CRC_DISCARDED` [rx, expected], 140 `RS232_TX` [tx], 141 `RS232_PORT_OPEN`
+  [params, ruleCount], 142 `RS232_PORT_CLOSED`, 143 `RS232_RULES_LOADED` [count]. Wiring:
+  `HardwareLib.addRs232EventListener { name, p -> RabbahLog.rs232(name, p) }` (the demo
+  bridge and `attachRabbahMqtt()` do this automatically). With a listener wired the plain
+  `[rs232] …` twin stays LOCAL-only, so the wire carries each exchange exactly once; with no
+  listener everything behaves as before (plain lines). Dashboards decode via the codebook
+  (`getCodebook` now includes the RS232 schema).
+- **Remote everything in one call** (7.16.0): `HardwareLib.attachLogSink { line -> send(line) }`
+  pipes every library line AND every control snapshot (CONFIG_JSON:, RS232_RULES_JSON:, …) into
+  whatever transport the host app already has — pair it with feeding the app's command channel
+  into `HardwareLib.handleCommand(cmd)` and a dashboard sees and controls the whole library.
+  Apps using our mqtt-lib need exactly one call instead: `HardwareLib.attachRabbahMqtt()`
+  (reflection — no compile dependency). Send `help` as a remote command to get the full
+  command list back as a log line.
+- **Zero-wiring rescue** (mqtt-lib 2.3.0): the app doesn't even need the call above any more.
+  On the first successful broker connection mqtt-lib itself reflectively runs
+  `HardwareLib.attachRabbahMqtt()` (`MqttConfig.autoAttachHardware`, default `true`), so swapping
+  in the two current AARs is the entire integration — MDB logs, RS232 events and every remote
+  command go live with no app code. Two new built-in commands answered by mqtt-lib directly
+  (they work even when hardware-lib was never wired, and the dashboard has buttons for both):
+  `attachHardware` — wires the bridge on demand and reports success or the reason it can't
+  (hardware-lib absent / older than 7.16.0); `version` — reports the mqtt-lib and hardware-lib
+  versions actually bundled in the running app, e.g. `[remote] mqtt-lib 2.3.0, hardware-lib
+  7.17.0`. Field diagnosis rule of thumb: `ping`→`PONG` but everything else "unknown command"
+  means mqtt-lib is alive and hardware-lib is not attached — send `version`, then
+  `attachHardware`.
 - **Dashboard/backend commands** (via handleCommand, so they work over MQTT):
   `rs232Open` / `rs232Open:9600` / `rs232Open:9600,8,1,N`, `rs232Close`, `rs232Send:HEX`,
-  `getRs232Rules`, `clearRs232Rules`, and the rule table as JSON
+  `rs232SendFrame:HEADER;DATAHEX`, `rs232SendAscii:HEADER;TEXT` (e.g.
+  `rs232SendAscii:A1 02;SUCCESS`), `rs232Simulate:HEX`, `getRs232Rules`, `clearRs232Rules`,
+  and the rule table as JSON
   `{"setRs232Rules":[{"name":"...","rx":"...","tx":"...","priceHi":2,"priceLo":3}]}` —
   so the backend can push the whole command set remotely, no rebuild.
 - Every frame reports as a `[rs232] rx=... matched=NAME tx=...` log line (`UNMATCHED` when no
   rule fits); replies are written before logging, same discipline as the MDB engine. Rules
   survive restarts (restored by `HardwareLib.init`).
+- **Test bench**: `rs232-sample-v1.0.apk` ("RS232 Test") — rule JSON editor with LOAD/GET/CLEAR,
+  baud + OPEN/CLOSE PORT, SIMULATE RX (test rules without the machine), SEND HEX, and a live
+  log of every `[rs232]` line. Source: `samples/Rs232SampleActivity.kt`.
 
 ## RabbahLog — sending logs (the compact codebook envelope)
 
@@ -408,7 +473,7 @@ status line, and an `inbox` subscription you can hit with `mosquitto_pub`.
 Preferred: consume the modules directly (`implementation project(':hardware-lib')`,
 `project(':mqtt-lib')`) — see the demo `app/`.
 
-If consuming raw AARs instead: add `hardware-lib-7.10.0.aar`, `mqtt-lib-2.0.0.aar`, **and**
+If consuming raw AARs instead: add `hardware-lib-7.17.0.aar`, `mqtt-lib-2.4.0.aar`, **and**
 `CM30-HardwareLibrary-1.0.9.aar` (hardware-lib needs it at runtime; AARs do not nest). If you
 skip MQTT entirely, `hardware-lib` + the CM30 AAR alone are enough.
 
@@ -523,9 +588,12 @@ flag; the engine reads the declared wire bytes.
 
 Unchanged by the split — the bridge reproduces it byte-identically:
 
-- Topics: `<prefix>/<deviceId>/liveLog` (out) and `<prefix>/<deviceId>/commands` (in);
-  suffixes configurable (`logTopicSuffix`/`commandTopicSuffix`/`statusTopicSuffix` for the
-  `devices/{deviceCode}/logs|cmd|status` backend contract).
+- Topics (the demo app now ships on the backend contract): `devices/<deviceId>/logs` (out),
+  `devices/<deviceId>/passthrough` (operator commands in — subscribed automatically since
+  mqtt-lib 2.1.0), `devices/<deviceId>/cmd` (backend commands in), retained
+  online/offline on `devices/<deviceId>/status`. All four suffixes configurable
+  (`logTopicSuffix`/`commandTopicSuffix`/`passthroughTopicSuffix`/`statusTopicSuffix`);
+  the legacy `<prefix>/<deviceId>/liveLog|commands` scheme still works via config.
 - Tagged messages out: `RABBAH_LOG:{…}` (compact log items), `CODEBOOK_JSON:{…}` (reply to
   `getCodebook`), `VMC_STATUS:{...}` (event-driven: instant on state change, on
   recentActivity flips, and on start/stop — no periodic heartbeat),

@@ -1,3 +1,4 @@
+
 <title>Hardware Library Manual</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -116,6 +117,8 @@
     <a href="#state">State</a>
     <a href="#settings">Settings</a>
     <a href="#hex">Hex configs</a>
+    <a href="#rs232">RS232</a>
+    <a href="#pulse">Pulse</a>
     <a href="#mqtt">MqttLib</a>
     <a href="#remote">Dashboard commands</a>
     <a href="#tagged">Tagged messages</a>
@@ -128,14 +131,14 @@
     The complete developer manual for <code class="cmd">hardware-lib</code> and
     <code class="cmd">mqtt-lib</code>: every function with a working example, every dashboard
     command, and what actually happens inside when you call each one. Current as of
-    hardware-lib&nbsp;7.10.0 / mqtt-lib&nbsp;2.0.0.
+    hardware-lib&nbsp;7.17.0 / mqtt-lib&nbsp;2.4.0.
   </p>
 
 
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.10.0</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-7.17.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -161,6 +164,26 @@ HardwareLib.addExchangeListener { e -&gt;                             <span clas
     plus the existing <code>vendListener</code> / <code>logListener</code> / <code>statusListener</code>.
     <strong>New input:</strong> <code>HardwareLib.handleCommand(text): Boolean</code> &mdash; feed it
     whatever any transport receives; it consumes what it recognizes.</p>
+    <p><strong>Remote everything in one call (7.16.0):</strong>
+    <code>HardwareLib.attachLogSink { line -&gt; send(line) }</code> pipes every library line AND
+    every control snapshot (<code>CONFIG_JSON:</code>, <code>RS232_RULES_JSON:</code>, ...) into
+    whatever transport the host app already has &mdash; pair it with feeding the app's command
+    channel into <code>handleCommand</code> and a dashboard sees and controls the whole library.
+    Apps on our mqtt-lib need exactly one call instead:
+    <code>HardwareLib.attachRabbahMqtt()</code> (reflection &mdash; no compile dependency).
+    Send <code>help</code> as a remote command to get the full command list back as a log
+    line.</p>
+    <p><strong>Zero-wiring rescue (mqtt-lib 2.3.0):</strong> the app doesn't even need that one
+    call any more. On the first successful broker connection mqtt-lib itself reflectively runs
+    <code>HardwareLib.attachRabbahMqtt()</code> (<code>MqttConfig.autoAttachHardware</code>,
+    default <code>true</code>) &mdash; swapping in the two current AARs is the entire
+    integration. Two new commands are answered by mqtt-lib directly, so they work even on a
+    device whose app never wired hardware-lib: <code>attachHardware</code> (wire the bridge on
+    demand; reports success or why not) and <code>version</code> (reports the mqtt-lib and
+    hardware-lib versions actually running). Field rule of thumb: <code>ping</code> answers
+    <code>PONG</code> but every other command comes back
+    <code>[remote] unknown command</code> &rarr; mqtt-lib is alive, hardware-lib is not attached
+    &mdash; send <code>version</code>, then <code>attachHardware</code>.</p>
     <p><strong>New in 7.1.0 / mqtt-lib 2.0.0:</strong>
     (1) <em>MQTT connection status, event-driven</em> &mdash;
     <code>RabbahMqtt.onConnection { connected -&gt; ... }</code> (or
@@ -231,7 +254,12 @@ HardwareLib.addControlListener / removeControlListener</pre>
     chain in order. Toggle with <code>setEmptySessionVisibility:on|off</code> (or
     <code>HardwareLib.setEmptySessionVisibility(true)</code>) to see every cycle again.</p>
     <p><strong>The CMD code schema.</strong> Every exchange carries one stable integer code
-    (<code>MdbCmd</code>, append-only). Edit a reply by number with
+    (<code>MdbCmd</code>, append-only). <strong>Since mqtt-lib 2.4.0 these SAME codes are the
+    log-envelope codes</strong>: a <code>RABBAH_LOG</code> item with <code>"s":"MDB"</code>
+    carries <code>"m":"110".."136"</code> exactly as tabled below (older builds emitted
+    0&ndash;26 for the same events; <code>getCodebook</code> always serves what the running
+    build emits). One code space end to end &mdash; MDB 110&ndash;136, RS232 137&ndash;143.
+    Edit a reply by number with
     <code>setReplyHex(code, hex)</code> / read it with <code>getReplyHex(code)</code>; the last
     frame the VMC sent per code is saved &mdash; <code>lastReceivedHex(code)</code> /
     <code>lastReceivedJson()</code>; <code>replyWireHex(code)</code> returns the LIVE wire bytes a code is answered with, CHK included ("00" = bare ACK, null = sends nothing), and <code>MdbCmd.fromCode(code)!!.rxShowsHex</code> says whether that code logs raw hex or the command name in {0} (7.9.2 - both live in the schema code itself):</p>
@@ -265,6 +293,14 @@ HardwareLib.addControlListener / removeControlListener</pre>
     <tr><td>134</td><td>EXPANSION, other subcommand</td><td>(varies)</td><td>&mdash;</td></tr>
     <tr><td>135</td><td>other peripheral (outside 10&ndash;17)</td><td>(ignored)</td><td>&mdash;</td></tr>
     <tr><td>136</td><td>unrecognized in current state</td><td>(none)</td><td>&mdash;</td></tr>
+    <tr><td colspan="4" style="font-weight:600; color:var(--accent);">RS232 schema (7.17.0) &mdash; log events, continue the same numbering (params in [brackets])</td></tr>
+    <tr><td>137</td><td colspan="3">RS232_RX_MATCHED &mdash; frame matched a rule [ruleName, rxHex, txHex or "-", price or "-1"]</td></tr>
+    <tr><td>138</td><td colspan="3">RS232_RX_UNMATCHED &mdash; frame matched no rule [rxHex]</td></tr>
+    <tr><td>139</td><td colspan="3">RS232_CRC_DISCARDED &mdash; bad XOR CRC, frame dropped [rxHex, expectedCrc]</td></tr>
+    <tr><td>140</td><td colspan="3">RS232_TX &mdash; manual write went out (sendHex / sendXor*) [txHex]</td></tr>
+    <tr><td>141</td><td colspan="3">RS232_PORT_OPEN [portParams, ruleCount]</td></tr>
+    <tr><td>142</td><td colspan="3">RS232_PORT_CLOSED []</td></tr>
+    <tr><td>143</td><td colspan="3">RS232_RULES_LOADED [ruleCount]</td></tr>
   </tbody>
 </table>
   </section>
@@ -274,17 +310,22 @@ HardwareLib.addControlListener / removeControlListener</pre>
     <h2><span class="eyebrow">01</span>Getting started</h2>
     <p>Add the AARs (or the Gradle modules) and initialize once at app startup:</p>
     <pre class="code"><span class="c">// build.gradle (raw AARs; skip if using the Gradle modules directly)</span>
-implementation files(<span class="s">'libs/mqtt-lib-2.0.0.aar'</span>)
-implementation files(<span class="s">'libs/hardware-lib-7.10.0.aar'</span>)
+implementation files(<span class="s">'libs/mqtt-lib-2.4.0.aar'</span>)
+implementation files(<span class="s">'libs/hardware-lib-7.17.0.aar'</span>)
 implementation files(<span class="s">'libs/CM30-HardwareLibrary-1.0.9.aar'</span>)  <span class="c">// hardware-lib's hardware runtime</span></pre>
 
     <pre class="code"><span class="c">// In your Application class or first Activity - the whole startup:</span>
 <span class="k">val</span> deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
     .takeLast(<span class="s">6</span>).uppercase()          <span class="c">// stable per device, no permission needed</span>
 
-MqttLib.init(MqttConfig(topicPrefix = <span class="s">"cm30-mdb/hamdan-rabbah"</span>, deviceId = deviceId))
+MqttLib.init(MqttConfig(topicPrefix = <span class="s">"devices"</span>, deviceId = deviceId,
+    logTopicSuffix = <span class="s">"logs"</span>, commandTopicSuffix = <span class="s">"cmd"</span>, statusTopicSuffix = <span class="s">"status"</span>))
+    <span class="c">// backend contract: devices/&lt;id&gt;/logs out, devices/&lt;id&gt;/passthrough in (auto-subscribed</span>
+    <span class="c">// since 2.1.0 - where the dashboard sends ALL commands), retained presence on .../status</span>
 MqttLib.start()                          <span class="c">// connect + reconnect loop + publisher thread</span>
-MdbMqttBridge.attach()                   <span class="c">// the ~30-line glue (see the split section above)</span>
+<span class="c">// MdbMqttBridge.attach() - OPTIONAL since mqtt-lib 2.3.0: the first successful connection
+// auto-attaches hardware-lib (logs + remote commands) by itself. Keep the explicit bridge
+// only if you need custom listener wiring; calling both is safe (attach is idempotent).</span>
 HardwareLib.init(applicationContext)          <span class="c">// persistence + settings restore (no networking inside)</span>
 HardwareLib.start()                           <span class="c">// open the MDB port + worker loop</span>
 <span class="c">// From here: all MDB data streams to the dashboard, all remote commands work.</span></pre>
@@ -296,9 +337,13 @@ HardwareLib.start()                           <span class="c">// open the MDB po
       <li><strong><code class="cmd">applicationContext</code></strong> is the app-lifetime Android
       Context — the library needs it only for SharedPreferences. Passing an Activity works too
       (the library unwraps it), but the application context is the clean form.</li>
-      <li><strong><code class="cmd">topicPrefix</code> must match the dashboard's</strong>
-      (log-viewer.html uses <code class="cmd">cm30-mdb/hamdan-rabbah</code>), or the dashboard
-      sees nothing.</li>
+      <li><strong>Topics follow the backend contract</strong>:
+      <code class="cmd">devices/&lt;id&gt;/logs</code> out,
+      <code class="cmd">devices/&lt;id&gt;/passthrough</code> in (operator/dashboard commands —
+      the backend owns <code class="cmd">devices/&lt;id&gt;/cmd</code> with its ack/progress
+      flow), retained presence on <code class="cmd">devices/&lt;id&gt;/status</code>. The
+      desktop dashboard watches both this scheme and the legacy
+      <code class="cmd">cm30-mdb/hamdan-rabbah/&lt;id&gt;/liveLog</code> world at once.</li>
     </ul>
   </section>
 
@@ -335,9 +380,13 @@ HardwareLib.start()                           <span class="c">// open the MDB po
     <h2><span class="eyebrow">03</span>Lifecycle functions</h2>
 
     <h3><code>MqttLib.init(config: MqttConfig)</code></h3>
-    <p>Stores the config and derives the two topics:
-    <code class="cmd">&lt;prefix&gt;/&lt;deviceId&gt;/liveLog</code> (out) and
-    <code class="cmd">…/commands</code> (in). No network yet.</p>
+    <p>Stores the config and derives the topics: the log stream out
+    (<code class="cmd">&lt;prefix&gt;/&lt;deviceId&gt;/&lt;logTopicSuffix&gt;</code>), TWO command
+    channels in (<code class="cmd">…/&lt;commandTopicSuffix&gt;</code> and, since 2.1.0,
+    <code class="cmd">…/&lt;passthroughTopicSuffix&gt;</code>, default
+    <code class="cmd">passthrough</code> — same listener chain, kept separate so operator
+    commands never mix into a backend-owned cmd topic), and optional retained presence. No
+    network yet.</p>
 
     <h3><code>MqttLib.start()</code> / <code>MqttLib.stop()</code></h3>
     <p><code class="cmd">start()</code> launches two threads: the connect/reconnect loop (retries
@@ -600,20 +649,59 @@ HardwareLib.setConfigHex(HardwareLib.ConfigName.READER_CONFIG_INFO_L3,
     hot-reloaded. "When rx this, tx this":</p>
     <pre class="code">Rs232Lib.setRulesJson(<span class="s">"""[
   {"name":"STATUS",       "rx":"FF FF FF FF FF", "tx":"01 00"},
-  {"name":"VEND_REQUEST", "rx":"F1 05 ?? ?? 0D", "tx":"06", "priceHi":2, "priceLo":3}
+  {"name":"VEND_REQUEST", "rx":"F1 05 ?? ?? 0D", "tx":"06", "priceHi":2,  "priceLo":3},
+  {"name":"VEND_VARLEN",  "rx":"F2 *",           "tx":"06", "priceHi":-3, "priceLo":-2}
 ]"""</span>)
 Rs232Lib.open(baud = <span class="s">9600</span>)
 Rs232Lib.vendRequestListener = { price, frame -&gt; <span class="c">/* charge, then Rs232Lib.sendHex(approvalHex) */</span> }</pre>
-    <p><code>??</code> in an rx pattern matches ANY byte - a vend request whose price bytes
-    change still matches one rule; <code>priceHi</code>/<code>priceLo</code> are the 0-based
-    byte positions of the price high/low bytes, extracted as hi&times;256+lo and delivered via
-    <code>vendRequestListener</code>. Frames are cut from the stream by silence
-    (<code>frameGapMs</code>, default 20 ms); first matching rule wins; replies are written
-    before logging. Manual TX any time with <code>sendHex(hex)</code>;
+    <p><code>??</code> in an rx pattern matches ANY ONE byte - a vend request whose price bytes
+    change still matches one rule - and a single trailing <code>*</code> matches ANY NUMBER of
+    remaining bytes, for frames whose LENGTH varies (<code>"A0 01 *"</code> matches every frame
+    starting <code>A0 01</code>). Two price formats, positions 0-based from the frame start or
+    NEGATIVE from the frame end (<code>-1</code> = last byte): <strong>binary</strong>
+    <code>priceHi</code>/<code>priceLo</code> (price = hi&times;256+lo), or
+    <strong>ASCII</strong> <code>amountStart</code>/<code>amountEnd</code> for card-reader
+    protocols where the amount is digit text (<code>31 35 30 30 30 30</code> = "150000" =
+    1500.00) - <code>amountEnd</code> is EXCLUSIVE, so <code>-1</code> stops before a trailing
+    CRC byte. Either way the price lands in <code>vendRequestListener</code>. Frames are cut
+    from the stream by silence (<code>frameGapMs</code>, default 1000 ms - tune live with <code>rs232Gap:MS</code>); first matching rule
+    wins; replies are written before logging.</p>
+    <p><strong>Framed replies</strong>: <code>buildXorFrame(header, dataHex)</code> builds
+    <code>[header][2-byte length][data][XOR CRC]</code>; <code>sendXorFrame</code> /
+    <code>sendXorAscii("A1 02", "SUCCESS")</code> build and send - length and CRC computed for
+    you (&rarr; <code>A1 02 00 07 53 55 43 43 45 53 53 E7</code>); <code>asciiHex("SUCCESS")</code>
+    converts text to hex.</p>
+    <p><strong>Incoming CRC validation</strong>: <code>setCrcCheck(true)</code> (persisted,
+    dashboard <code>rs232Crc:on|off</code>) - a received frame whose last byte is not the XOR
+    of all preceding bytes is DISCARDED with no reply and no listeners, exactly as the
+    card-reader protocol requires; the log shows
+    <code>CRC FAIL (expected XX) - discarded</code>. Default off. Manual TX any time with <code>sendHex(hex)</code>;
     <code>exchangeListener</code> gets every frame (rxHex, ruleName, txHex, price). Dashboard
     commands: <code>rs232Open[:9600[,8,1,N]]</code>, <code>rs232Close</code>,
-    <code>rs232Send:HEX</code>, <code>getRs232Rules</code>, <code>clearRs232Rules</code>, and
+    <code>rs232Send:HEX</code>, <code>rs232SendFrame:HEADER;DATAHEX</code>,
+    <code>rs232SendAscii:HEADER;TEXT</code>, <code>rs232Simulate:HEX</code>,
+    <code>rs232Crc:on|off</code>, <code>getRs232Rules</code>, <code>clearRs232Rules</code>, and
     <code>{"setRs232Rules":[...]}</code> to push the whole table remotely.</p>
+    <p><strong>The RS232 codebook schema (7.17.0 / mqtt-lib 2.2.0+)</strong>: serial exchanges
+    ship as coded RABBAH_LOG items, schema <code>"RS232"</code> - parseable exactly like MDB
+    instead of raw text. Codes continue after the MDB CMD schema (110-136), so an RS232 code
+    can never be confused with an MDB one:
+    137 <code>RS232_RX_MATCHED</code> [rule, rx, tx|-, price],
+    138 <code>RS232_RX_UNMATCHED</code> [rx], 139 <code>RS232_CRC_DISCARDED</code> [rx, expected],
+    140 <code>RS232_TX</code> [tx], 141 <code>RS232_PORT_OPEN</code> [params, ruleCount],
+    142 <code>RS232_PORT_CLOSED</code>, 143 <code>RS232_RULES_LOADED</code> [count]. Wire it with
+    <code>HardwareLib.addRs232EventListener { name, p -&gt; RabbahLog.rs232(name, p) }</code> -
+    the demo bridge and <code>attachRabbahMqtt()</code> do this automatically. With a listener
+    wired, the plain <code>[rs232] ...</code> twin stays LOCAL-only (each exchange crosses the
+    wire exactly once); with none, plain lines ship as before. <code>getCodebook</code> now
+    serves the RS232 schema, so dashboards decode it with zero changes.</p>
+    <p><strong>Testing without the machine</strong>: <code>Rs232Lib.simulateFrame(hex)</code>
+    feeds a fake received frame through the matcher exactly as if the machine sent it -
+    matching, price extraction and both listeners all run; the reply is really written when the
+    port is open, otherwise only logged. The <strong>RS232 Test bench APK</strong>
+    (<code>rs232-sample-v2.0.apk</code>, source <code>samples/Rs232SampleActivity.kt</code>)
+    puts the whole workflow on buttons: rule JSON editor (LOAD / GET / CLEAR), baud +
+    OPEN / CLOSE PORT, SIMULATE RX, SEND HEX, live <code>[rs232]</code> log.</p>
   </section>
 
   <section id="pulse">
@@ -706,15 +794,44 @@ RABBAH_LOG:{"t":"1787743651002","s":"MDB","m":"13","a":"vending-app","v":"2.13.5
     on-device screen uses, so the two can never show different wording.
     <code class="cmd">RabbahLog.makeLogJson(...)</code> builds the envelope without sending.</p>
 
-    <h3>Broker auth (private mosquitto etc.)</h3>
+    <h3>MqttConfig — every field, what it does, what to set</h3>
+    <p>Everything configurable lives in the ONE <code class="cmd">MqttConfig</code> object passed
+    to <code class="cmd">MqttLib.init()</code>. Full reference (mqtt-lib 2.3.0):</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Field</th><th>Default</th><th>What it does / guidance</th></tr></thead>
+      <tbody>
+        <tr><td><code>topicPrefix</code></td><td>required</td><td>First topic segment. The fleet contract uses <code>"devices"</code>.</td></tr>
+        <tr><td><code>deviceId</code></td><td>required</td><td>The device code (e.g. <code>D-5007</code>) — the middle topic segment on every channel.</td></tr>
+        <tr><td><code>brokerHost</code></td><td><code>"mosquitto"</code></td><td>Broker hostname. The default resolves only in-cluster — real devices must pass the reachable host (e.g. <code>uat-api.rabbah.sa</code>), from local.properties → BuildConfig, never hardcoded.</td></tr>
+        <tr><td><code>brokerPort</code></td><td><code>1883</code></td><td>Broker TCP port (plain MQTT).</td></tr>
+        <tr><td><code>username</code> / <code>password</code></td><td><code>null</code></td><td>Broker auth (MQTT 3.1.1: password only sent when username is set). Required on the Rabbah broker.</td></tr>
+        <tr><td><code>clientId</code></td><td><code>null</code></td><td>Fixed MQTT client id. Null = <code>&lt;deviceId&gt;-&lt;millis&gt;</code>, unique enough that the broker never kicks a same-id session. Never share one id between two live clients — they'll disconnect each other in a loop.</td></tr>
+        <tr><td><code>keepAliveSec</code></td><td><code>30</code></td><td>MQTT keep-alive: the library pings the broker on this cadence when idle; the broker declares the device dead (fires the retained <code>offline</code> Will) after ~1.5&times; this with no traffic. 30 = offline detected in ~45&nbsp;s, negligible traffic — right for the fleet. Lower = faster offline detection; higher = less traffic but a dead device can show online for minutes. Connection-level: to change it, <code>stop()</code> &rarr; <code>init(newConfig)</code> &rarr; <code>start()</code>.</td></tr>
+        <tr><td><code>queueCapacity</code></td><td><code>1000</code></td><td>Outbound buffer while offline. When full the OLDEST message drops and <code>droppedMessages</code> counts it — a long outage can never grow into an OOM.</td></tr>
+        <tr><td><code>logTopicSuffix</code></td><td><code>"liveLog"</code></td><td>Outbound log stream channel. <strong>Fleet contract: <code>"logs"</code></strong>.</td></tr>
+        <tr><td><code>commandTopicSuffix</code></td><td><code>"commands"</code></td><td>Backend command channel (ack/progress flow lives here). <strong>Fleet contract: <code>"cmd"</code></strong>.</td></tr>
+        <tr><td><code>statusTopicSuffix</code></td><td><code>null</code></td><td>Presence. When set (<strong>fleet: <code>"status"</code></strong>): retained <code>online</code> on every connect, broker publishes retained <code>offline</code> via Last Will on drop, graceful <code>stop()</code> publishes <code>offline</code> itself. Null = no presence traffic.</td></tr>
+        <tr><td><code>passthroughTopicSuffix</code></td><td><code>"passthrough"</code></td><td>The operator/dashboard command channel (2.1.0+), kept SEPARATE from the backend-owned cmd topic; same listener chain. <strong>Leave the default</strong> — the dashboard publishes to <code>passthrough</code>, so renaming it (or the <code>passtrough</code> misspelling) silently breaks all remote control. Null disables it.</td></tr>
+        <tr><td><code>autoAttachHardware</code></td><td><code>true</code></td><td><strong>New in 2.3.0.</strong> On the first successful connection mqtt-lib reflectively runs <code>HardwareLib.attachRabbahMqtt()</code> — hardware-lib's logs and remote commands go live with ZERO app wiring. A no-op when hardware-lib is absent (pure-MQTT apps) or older than 7.16.0. <strong>Leave it on</strong>; turning it off recreates the "device answers ping but nothing else" fleet bug.</td></tr>
+      </tbody>
+    </table></div>
+
+    <p><strong>The block a fleet app should actually ship</strong> (only 7 values differ from
+    defaults — passthrough and auto-attach are already right):</p>
     <pre class="code">MqttLib.init(MqttConfig(
-    topicPrefix = <span class="s">"cm30-mdb/hamdan-rabbah"</span>, deviceId = myDeviceId,
-    brokerHost = <span class="s">"YOUR-SERVER-IP"</span>, brokerPort = 1883,
-    username = <span class="s">"rabbah"</span>, password = <span class="s">"..."</span>,
-    logTopicSuffix     = <span class="s">"logs"</span>,     <span class="c">// default "liveLog" - the automatic log stream's channel</span>
-    commandTopicSuffix = <span class="s">"cmd"</span>,      <span class="c">// default "commands" - where commands arrive</span>
-    statusTopicSuffix  = <span class="s">"status"</span>    <span class="c">// default null - retained online/offline presence (birth + LWT)</span>
-))</pre>
+    topicPrefix        = <span class="s">"devices"</span>,
+    deviceId           = deviceCode,               <span class="c">// e.g. "D-5007"</span>
+    brokerHost         = BuildConfig.MQTT_HOST,    <span class="c">// uat-api.rabbah.sa - from local.properties</span>
+    brokerPort         = 1883,
+    username           = BuildConfig.MQTT_USERNAME,
+    password           = BuildConfig.MQTT_PASSWORD,
+    logTopicSuffix     = <span class="s">"logs"</span>,
+    commandTopicSuffix = <span class="s">"cmd"</span>,
+    statusTopicSuffix  = <span class="s">"status"</span>
+))
+MqttLib.start()
+<span class="c">// That's the ENTIRE integration on 2.3.0: on first connect mqtt-lib auto-attaches
+// hardware-lib (logs + all remote commands). No bridge code, no attach call.</span></pre>
     <p>With <code class="cmd">statusTopicSuffix</code> set, a retained <code class="cmd">online</code>
     is published on every connect, the broker publishes a retained <code class="cmd">offline</code>
     via Last Will if the device drops, and a graceful <code class="cmd">stop()</code> publishes
@@ -722,6 +839,15 @@ RABBAH_LOG:{"t":"1787743651002","s":"MDB","m":"13","a":"vending-app","v":"2.13.5
     contract (<code class="cmd">devices/{deviceCode}/logs|cmd|status</code>); the defaults keep the
     existing dashboard wire format untouched, and the dashboard follows a re-pointed device via
     <code class="cmd">?logTopic=logs&amp;cmdTopic=cmd</code>.</p>
+    <p><strong>Attaching hardware-lib — three ways, first one wins</strong> (all idempotent, a
+    second attach wires nothing twice):
+    (1) <em>automatic</em> — mqtt-lib 2.3.0 does it on first connect (the default path);
+    (2) <em>from the dashboard</em> — the <strong>Attach HW</strong> toolbar button (or typing
+    <code class="cmd">attachHardware</code> in the passthrough bar) wires it remotely on demand,
+    and replies with success or the reason it can't;
+    (3) <em>in code</em> — <code class="cmd">HardwareLib.attachRabbahMqtt()</code>, the pre-2.3.0
+    way, still works. Check what a device is running any time with the
+    <strong>Version</strong> button / <code class="cmd">version</code> command.</p>
     <p>Point the dashboard at the same broker over WebSocket:
     <code class="cmd">log-viewer.html?broker=ws://HOST:9001&amp;user=...&amp;pass=...</code>
     (values persist in localStorage; a browser cannot speak plain TCP 1883).</p>
@@ -744,8 +870,28 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
   <!-- ============================================================ -->
   <section id="remote">
     <h2><span class="eyebrow">09</span>Dashboard command reference</h2>
-    <p>Everything the dashboard can publish to <code class="cmd">…/&lt;deviceId&gt;/commands</code>.
+    <p>Everything the dashboard publishes to the device's PASSTHROUGH topic
+    (<code class="cmd">devices/&lt;deviceId&gt;/passthrough</code>; the legacy
+    <code class="cmd">…/commands</code> channel still accepts the same commands).
     Plain text unless noted. Each row = one message.</p>
+    <div class="callout">
+      <p><strong>Desktop dashboard app</strong> (<code>dashboard-app/</code> in the repo,
+      packaged as <code>Hardware-Dashboard-win32-x64.zip</code>): the log-viewer UI as an
+      Electron app that talks <em>plain MQTT TCP 1883</em> - the exact connection the device
+      uses - so the broker needs NO websocket listener. First launch asks for the MQTT password
+      once (F2 opens the settings any time). It watches EVERY topic scheme at once
+      (<code>devices/+/logs</code> AND the legacy <code>cm30-mdb/.../+/liveLog</code>) so demo
+      devices and the production fleet share one dropdown, with a SEARCH box that filters
+      thousands of device ids; a <strong>protocol selector</strong> swaps the toolbar between
+      MDB, RS232 (port/CRC/gap/rules) and PULSE (init/train/ready) controls; a
+      <strong>passthrough bar</strong> free-types any command to the selected device; and the
+      <strong>Topics</strong> button opens a live tree of every topic on the broker with raw
+      publish to any of them. ALL commands go to the selected device's passthrough topic -
+      the backend-owned <code>cmd</code> topic is never written. The toolbar's
+      <strong>Version</strong> and <strong>Attach HW</strong> buttons send the mqtt-lib 2.3.0
+      built-ins - the first stop when a fleet device answers <code>ping</code> but nothing
+      else.</p>
+    </div>
     <div class="table-wrap"><table>
       <thead><tr><th>Command</th><th>What the device does</th><th>Reply on liveLog</th></tr></thead>
       <tbody>
@@ -767,6 +913,8 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
         <tr><td><code>setPeripheralVisibility:on|off</code></td><td>log-debug: show traffic addressed to OTHER peripherals (coin changer, bill validator) - independent of the unhandled toggle</td><td>ack + SETTINGS_JSON</td></tr>
         <tr><td><code>getCodebook</code></td><td>answered by mqtt-lib's log layer</td><td>CODEBOOK_JSON snapshot (decode dictionary)</td></tr>
         <tr><td><code>ping</code></td><td>answered by mqtt-lib itself</td><td><code>PONG</code></td></tr>
+        <tr><td><code>version</code> <em>(mqtt-lib 2.3.0)</em></td><td>answered by mqtt-lib itself — reports the library versions actually bundled in the running app</td><td><code>[remote] mqtt-lib 2.4.0, hardware-lib 7.17.0</code></td></tr>
+        <tr><td><code>attachHardware</code> <em>(mqtt-lib 2.3.0)</em></td><td>answered by mqtt-lib itself — wires hardware-lib's remote commands + log stream on demand (the rescue for an app that never called <code>attachRabbahMqtt()</code>; auto-runs on connect by default)</td><td><code>[remote] hardware-lib attached …</code> or the reason it can't (absent / older than 7.16.0)</td></tr>
         <tr><td><em>anything else</em></td><td>offered to the app's own listeners first</td><td><code>[remote] unknown command: …</code> if nobody consumed it</td></tr>
       </tbody>
     </table></div>
@@ -791,6 +939,6 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
 </main>
 
 <footer>
-  CM30 MDB Slave project — developer manual. hardware-lib 7.10.0 · mqtt-lib 2.0.0 · demo app v2.13.24
-  (build 54). Companion docs: the architecture reference and the interactive vend simulator.
+  CM30 MDB Slave project — developer manual. hardware-lib 7.17.0 · mqtt-lib 2.4.0 · demo app v2.13.36 (build 84). Companion docs: the architecture reference and the interactive vend simulator.
 </footer>
+
