@@ -8,14 +8,14 @@ Two things live here:
 | `react-native-mdb/` | **The RN library** — a thin native bridge over `hardware-lib` (the MDB engine, no networking inside) + `mqtt-lib` (the proven Kotlin AARs are bundled inside; the MQTT glue lives in `initMdb()`). Full vend/payment flow, dashboard link, settings, hex configs, CMD-coded exchange events — everything the native API has, as JS functions + events. |
 | `MdbDemo/` | **The demo app** (reference integration) — status badge, live log, and a vend-approval sheet. `MdbDemo/App.tsx` is the file to read. |
 | `MdbRnDemo-v1.0.0-release.apk` | **Prebuilt release APK** of the demo — standalone, no Metro needed. |
-| `dashboard/log-viewer.html` | **The live MQTT dashboard** — open in any browser, pick the device, send remote commands. Same file the native app uses. |
+| `Hardware Dashboard` (Hardware-Library repo, `dashboard-app/`; packaged exe on its Releases page) | **The live MQTT dashboard** — pick the device, send remote commands. One dashboard for the native and React Native apps. |
 | `docs/mdb-reactnative-manual.html` | **The full RN developer manual** — every function, event and config with examples. Start here. |
 | `docs/mdb-library-manual.html` | The native (Kotlin) library manual — the layer under the bridge. |
 | `docs/mdb-architecture.html` | Architecture doc — how MDB engine, MQTT and dashboard talk to each other. |
 | `docs/mdb-vend-simulator.html` | Interactive vend-flow simulator — step through request/approve/success/fail paths. |
 
 Android-only (the CM30 hardware library is Android/armeabi-v7a). The same dashboard
-(`log-viewer.html`) works unchanged — the wire protocol is identical to the native app's.
+(`dashboard-app/dashboard.html`) works unchanged — the wire protocol is identical to the native app's.
 
 ## Installing the library in your own app
 

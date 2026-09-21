@@ -343,7 +343,7 @@ const snap  = await Mdb.configSnapshotJson();             // full JSON snapshot<
 
   <h2 id="dashboard"><span class="eyebrow">07 &middot; Ops</span>Dashboard</h2>
   <p>
-    The same <code>dashboard/log-viewer.html</code> used with the native app works unchanged &mdash; the
+    The same <code>dashboard-app/dashboard.html</code> (Hardware Dashboard desktop app) used with the native app works unchanged &mdash; the
     wire protocol is identical. Open it in any browser, pick the device from the dropdown, and every
     remote command (level select, session mode, cancel mode, config edits, MQTT log mute, ping) runs in
     parallel with your JS calls: both paths execute the same Kotlin code and stay in sync.
@@ -366,7 +366,7 @@ cd android && ./gradlew assembleRelease
     <tr><td><code>react-native-mdb/</code></td><td>The library: JS API, TypeScript typings, native bridge, bundled AARs.</td></tr>
     <tr><td><code>MdbDemo/</code></td><td>The demo app (React Native 0.87).</td></tr>
     <tr><td><code>MdbRnDemo-v1.0.0-release.apk</code></td><td>Prebuilt release APK of the demo.</td></tr>
-    <tr><td><code>dashboard/log-viewer.html</code></td><td>The live MQTT dashboard.</td></tr>
+    <tr><td><code>dashboard-app/dashboard.html</code> (Hardware Dashboard desktop app)</td><td>The live MQTT dashboard.</td></tr>
     <tr><td><code>docs/</code></td><td>This manual, plus the native library manual, architecture doc and vend simulator.</td></tr>
     <tr><td><code>README.md</code></td><td>Short version of this manual.</td></tr>
   </table></div>

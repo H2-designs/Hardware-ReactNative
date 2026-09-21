@@ -849,7 +849,7 @@ MqttLib.start()
     way, still works. Check what a device is running any time with the
     <strong>Version</strong> button / <code class="cmd">version</code> command.</p>
     <p>Point the dashboard at the same broker over WebSocket:
-    <code class="cmd">log-viewer.html?broker=ws://HOST:9001&amp;user=...&amp;pass=...</code>
+    <code class="cmd">Hardware Dashboard.exe</code> (dashboard-app, F2 sets broker / user / password)
     (values persist in localStorage; a browser cannot speak plain TCP 1883).</p>
 
     <h3>The low level, still public</h3>
@@ -876,7 +876,7 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
     Plain text unless noted. Each row = one message.</p>
     <div class="callout">
       <p><strong>Desktop dashboard app</strong> (<code>dashboard-app/</code> in the repo,
-      packaged as <code>Hardware-Dashboard-win32-x64.zip</code>): the log-viewer UI as an
+      packaged as <code>Hardware-Dashboard-win32-x64.zip</code>): the same dashboard UI as an
       Electron app that talks <em>plain MQTT TCP 1883</em> - the exact connection the device
       uses - so the broker needs NO websocket listener. First launch asks for the MQTT password
       once (F2 opens the settings any time). It watches EVERY topic scheme at once

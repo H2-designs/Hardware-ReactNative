@@ -286,7 +286,7 @@
         <p>The compact log layer: RabbahLog turns every event into one codebook-coded JSON item; RabbahMqtt is the generic app-facing surface - sendLog/sendError, onCommand, sendText/sendJson/subscribeText/subscribeJson on any topic - with zero MDB involvement.</p>
       </div>
       <div class="card">
-        <h4>log-viewer.html</h4>
+        <h4>Hardware Dashboard (dashboard-app/dashboard.html)</h4>
         <p>The whole PC control surface in one static file: live log, multi-device picker, all
         toggles, and the per-byte Config editor with level-aware rows.</p>
       </div>
@@ -490,7 +490,7 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
 
         <rect x="854" y="330" width="112" height="52" rx="8" fill="var(--surface)" stroke="currentColor" opacity="0.9"/>
         <text x="910" y="352" text-anchor="middle" font-size="11" font-weight="600" fill="currentColor">PC browser</text>
-        <text x="910" y="366" text-anchor="middle" font-size="9" fill="var(--muted)">log-viewer.html</text>
+        <text x="910" y="366" text-anchor="middle" font-size="9" fill="var(--muted)">dashboard.html</text>
 
         <line x1="910" y1="264" x2="910" y2="328" stroke="currentColor" marker-end="url(#arrow)"/>
         <text x="944" y="300" font-size="9" fill="var(--muted)" text-anchor="middle">liveLog</text>
@@ -573,7 +573,7 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
       <code class="cmd">MqttConfig</code> takes <code class="cmd">username / password</code> for
       an authenticated broker (e.g. a private mosquitto), and the dashboard points at the same
       broker over WebSocket via URL parameters —
-      <code class="cmd">log-viewer.html?broker=ws://HOST:9001&amp;user=…&amp;pass=…</code> —
+      <code class="cmd">Hardware Dashboard.exe</code> (dashboard-app, F2 sets broker / user / password) —
       persisted in localStorage. <code class="cmd">rabbahlog-sample-v1.2.apk</code> is the proof
       app: on-screen broker settings, log/telemetry/burst buttons, a live queued/sent/dropped
       line, and an <code class="cmd">inbox</code> subscription.
@@ -881,7 +881,7 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
         <tr><td class="mono">mqtt-lib / RabbahMqtt.kt</td><td>Generic app-facing API: sendLog/sendError, onCommand, sendText/sendJson/subscribeText/subscribeJson on any topic.</td></tr>
         <tr><td class="mono">hardware-lib / MdbSettings.kt</td><td>SharedPreferences: session mode, cancel mode, MDB level, MQTT log muting, three traffic-visibility flags.</td></tr>
         <tr><td class="mono">hardware-lib / MdbConfigStore.kt</td><td>SharedPreferences: the raw hex of every response payload, length-locked (Begin Session 1–35 free), remotely editable — including the L3 feature bits that gate Always Idle.</td></tr>
-        <tr><td class="mono">log-viewer.html</td><td>The PC control surface. Subscribes to all devices' logs, commands the selected one, renders level-aware config rows, and treats device acks — not sends — as success.</td></tr>
+        <tr><td class="mono">dashboard-app/dashboard.html</td><td>The PC control surface. Subscribes to all devices' logs, commands the selected one, renders level-aware config rows, and treats device acks — not sends — as success.</td></tr>
       </tbody>
     </table></div>
   </section>

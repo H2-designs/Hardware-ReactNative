@@ -145,7 +145,7 @@
       The device side connects to the same mosquitto with the same credentials via
       <code class="cmd">MqttConfig(brokerHost, brokerPort, username, password)</code>; the
       dashboard reaches it over the WebSocket listener
-      (<code class="cmd">log-viewer.html?broker=ws://HOST:9001&amp;user=…&amp;pass=…</code>).
+      (<code class="cmd">Hardware Dashboard.exe</code> (dashboard-app, F2 sets broker / user / password)).
     </p>
   </section>
 
@@ -234,7 +234,7 @@ RabbahMqtt.sendJson(<span class="s">"cmd/progress"</span>, progress)      <span 
         <code class="cmd">…/logs</code> and <code class="cmd">…/cmd</code>. The defaults stay
         <code class="cmd">liveLog</code> / <code class="cmd">commands</code>, so every existing
         device and the dashboard keep working unchanged; the dashboard follows a re-pointed device
-        via <code class="cmd">log-viewer.html?logTopic=logs&amp;cmdTopic=cmd</code>.
+        via <code class="cmd">F2 &rarr; topics: prefix devices/, logs, cmd, passthrough</code>.
       </p>
       <p>
         2. <strong>Presence is implemented.</strong> Setting

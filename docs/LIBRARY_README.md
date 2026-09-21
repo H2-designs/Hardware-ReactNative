@@ -459,9 +459,9 @@ MqttLib.init(MqttConfig(
 ))
 ```
 
-The `log-viewer.html` dashboard can point at the same broker via its **WebSocket** listener
+The Hardware Dashboard desktop app (`dashboard-app/`, packaged exe on the GitHub Releases page) speaks plain MQTT TCP to the same broker
 (mosquitto needs `listener 9001` + `protocol websockets`): open it once as
-`log-viewer.html?broker=ws://YOUR-SERVER:9001&user=rabbah&pass=…` — values persist in
+`Hardware Dashboard.exe` (F2 sets broker / user / password) — values persist in
 localStorage (query wins over stored). A browser cannot speak plain TCP 1883.
 
 `rabbahlog-sample-v1.4.apk` (in `dist/`) is the proof app: editable broker settings on screen,
@@ -577,7 +577,7 @@ acks — is `MdbConfigStore`'s job. Over MQTT, send JSON on the commands topic:
 
 Per-name validation, per-name ack lines, and a full `CONFIG_JSON:` snapshot come back
 automatically. The legacy text form (`setConfig:NAME:hex`, `resetConfig:NAME`, `getConfig`)
-still works, so the existing `log-viewer.html` dashboard needs no changes. Locally:
+still works, so the existing `dashboard-app/dashboard.html` dashboard needs no changes. Locally:
 `MdbConfigStore.applyJson(json)`, `.get(name)`, `.set(name, hex)`, `.snapshotJson()`.
 
 Special byte worth knowing: **Always Idle** (Level 3) is bit 5 of the LAST byte (Z34) of
