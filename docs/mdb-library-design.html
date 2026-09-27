@@ -235,7 +235,7 @@
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.28.0</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-7.29.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -723,6 +723,7 @@ HardwareLib.vendListener = <span class="k">object</span> : HardwareLib.VendListe
     <span class="k">override fun</span> onVendSuccess(itemNumber: Int) { scope.launch { gateway.capture() } }
     <span class="k">override fun</span> onVendFailure()                { scope.launch { gateway.refund() } }
     <span class="k">override fun</span> onSessionEnded()               { <span class="c">/* per-session cleanup */</span> }
+    <span class="k">override fun</span> onVendAborted(reason: VendAbortReason) { scope.launch { gateway.cancelUiAndVoid(); ui.reset() } }  <span class="c">// 7.29.0</span>
 }</pre>
 
     <div class="callout warn">
@@ -770,7 +771,7 @@ HardwareLib.vendListener = <span class="k">object</span> : HardwareLib.VendListe
     <span class="k">val</span> droppedMessages: Long                             <span class="c">// queue-overflow counter</span>
 }</pre>
 
-    <h3>hardware-lib (7.28.0)</h3>
+    <h3>hardware-lib (7.29.0)</h3>
     <pre class="code"><span class="k">object</span> HardwareLib {
     <span class="k">fun</span> init(context: Context)   <span class="c">// MQTT optional: without it HardwareLib runs fully offline</span>
     <span class="k">fun</span> start() / stop()         <span class="c">// open/close the MDB port + worker loop</span>
@@ -808,6 +809,7 @@ HardwareLib.vendListener = <span class="k">object</span> : HardwareLib.VendListe
         <span class="k">fun</span> onVendSuccess(itemNumber: Int)
         <span class="k">fun</span> onVendFailure()
         <span class="k">fun</span> onSessionEnded()
+        <span class="k">fun</span> onVendAborted(reason: VendAbortReason)   <span class="c">// 7.29.0: unified - exactly once per vend that did not complete</span>
     }
     <span class="k">var</span> vendListener: VendListener?
     <span class="k">var</span> logListener: ((line: String, showOnScreen: Boolean) -&gt; Unit)?
@@ -870,7 +872,7 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
         <tr><td>publishLog() spawned <strong>a new thread per message</strong></td><td>One bounded queue + one publisher thread. Producers never block, never race.</td></tr>
         <tr><td>Engine → Activity → MqttBridge; the Activity was the glue</td><td>Engine enqueues directly; the app keeps optional local listeners purely for its own UI.</td></tr>
         <tr><td>One big remote-command <code class="cmd">when</code> in the Activity</td><td>Listener chain: hardware-lib auto-registers, the app adds its own, first-consume-wins.</td></tr>
-        <tr><td>No typed vend events — only log strings</td><td><code class="cmd">VendListener</code>: onVendRequest / onVendSuccess / onVendFailure / onSessionEnded, built for the authorize→capture→refund payment pattern.</td></tr>
+        <tr><td>No typed vend events — only log strings</td><td><code class="cmd">VendListener</code>: onVendRequest / onVendSuccess / onVendFailure / onVendCancelled / onSessionEnded / onVendAborted (7.29.0, unified), built for the authorize→capture→refund payment pattern.</td></tr>
         <tr><td>Config text commands parsed in the Activity</td><td>JSON contract handled inside <code class="cmd">MdbConfigStore.applyJson()</code>; legacy text form still accepted, so the existing dashboard needed zero changes.</td></tr>
         <tr><td>Device + simulator flavors</td><td>Simulator removed — real CM30 hardware only.</td></tr>
       </tbody>
@@ -879,7 +881,7 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
     <div class="callout">
       <p>
         <strong>Artifacts:</strong> <code class="cmd">mqtt-lib-2.3.0.aar</code>,
-        <code class="cmd">hardware-lib-7.28.0.aar</code> (plus the bundled CM30 vendor .aar as its
+        <code class="cmd">hardware-lib-7.29.0.aar</code> (plus the bundled CM30 vendor .aar as its
         runtime dependency), the demo APK as the reference integration, and
         <code class="cmd">LIBRARY_README.md</code> for the integrating developer. Wire protocol
         unchanged throughout — the existing <code class="cmd">Hardware Dashboard</code> dashboard
@@ -890,7 +892,7 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
 </main>
 
 <footer>
-  CM30 MDB Slave project — library architecture, as built. Current as of hardware-lib 7.28.0 /
-  mqtt-lib 2.6.0 (demo app v2.13.51, build 99): auto-attach on connect, attachHardware/version
+  CM30 MDB Slave project — library architecture, as built. Current as of hardware-lib 7.29.0 /
+  mqtt-lib 2.6.0 (demo app v2.13.52, build 100): auto-attach on connect, attachHardware/version
   built-ins, passthrough operator channel, retained presence, RS232 + Pulse engines.
 </footer>
