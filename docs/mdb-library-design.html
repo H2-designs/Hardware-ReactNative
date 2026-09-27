@@ -235,7 +235,7 @@
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.29.0</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-8.0.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -610,7 +610,7 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
     </p>
 
     <figure>
-      <svg viewBox="0 0 940 620" role="img" aria-label="Sequence diagram of a paid vend across four lanes: VMC, HardwareLib, the app's VendListener, and the payment gateway. VEND REQUEST from the VMC is ACKed by HardwareLib which fires onVendRequest to the app; the app authorizes with the gateway while HardwareLib keeps answering polls with ACK; on approval the app calls approveVend and HardwareLib sends VEND APPROVED on the next poll; the VMC dispenses and sends VEND SUCCESS, HardwareLib fires onVendSuccess and the app captures the payment; SESSION COMPLETE then END SESSION close the session and onSessionEnded fires for cleanup. Alternates: a declined payment calls cancelVend leading to VEND DENIED; a failed dispense sends VEND FAILURE leading to onVendFailure and a refund.">
+      <svg viewBox="0 0 940 620" role="img" aria-label="Sequence diagram of a paid vend across four lanes: VMC, HardwareLib, the app's VendListener, and the payment gateway. VEND REQUEST from the VMC is ACKed by HardwareLib which fires onVendRequest to the app; the app authorizes with the gateway while HardwareLib keeps answering polls with ACK; on approval the app calls approveVend and HardwareLib sends VEND APPROVED on the next poll; the VMC dispenses and sends VEND SUCCESS, HardwareLib fires onVendSuccess and the app captures the payment; SESSION COMPLETE then END SESSION close the session; nothing more fires, the outcome was already reported. Alternates: a declined payment calls cancelVend leading to VEND DENIED; a failed dispense sends VEND FAILURE leading to onVendFailure and a refund.">
         <defs>
           <marker id="varr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
@@ -694,13 +694,13 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
 
         <!-- 12 onSessionEnded -->
         <line x1="340" y1="498" x2="596" y2="498" stroke="var(--warn)" marker-end="url(#varrW)"/>
-        <text x="468" y="490" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--warn)">onSessionEnded() — cleanup</text>
+        <text x="468" y="490" text-anchor="middle" font-size="10.5" fill="var(--muted)">(session closed — outcome already reported, nothing more fires)</text>
 
         <!-- alternates note -->
         <rect x="45" y="540" width="860" height="62" rx="8" fill="none" stroke="var(--err)" stroke-dasharray="4 3" opacity="0.8"/>
         <text x="475" y="562" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--err)">The two exits that are not a sale</text>
-        <text x="475" y="580" text-anchor="middle" font-size="10" fill="var(--muted)">Gateway DECLINED → HardwareLib.cancelVend() → VEND DENIED goes out → session ends → onSessionEnded()</text>
-        <text x="475" y="595" text-anchor="middle" font-size="10" fill="var(--muted)">Product JAMMED → VMC sends VEND FAILURE (13 03) → onVendFailure() → REFUND/void the hold → onSessionEnded()</text>
+        <text x="475" y="580" text-anchor="middle" font-size="10" fill="var(--muted)">Gateway DECLINED → HardwareLib.cancelVend() → onVendFailure() (CANCELLED_BY_APP) → VEND DENIED goes out → session ends</text>
+        <text x="475" y="595" text-anchor="middle" font-size="10" fill="var(--muted)">Product JAMMED → VMC sends VEND FAILURE (13 03) → onVendFailure() (FAILED) → REFUND/void the hold. Walk-away with no cancel at all → END SESSION → onVendFailure() (SESSION_ENDED)</text>
       </svg>
       <figcaption>
         Authorize on request, capture on success, refund on failure, clean up on session end.
@@ -721,9 +721,7 @@ HardwareLib.vendListener = <span class="k">object</span> : HardwareLib.VendListe
         }
     }
     <span class="k">override fun</span> onVendSuccess(itemNumber: Int) { scope.launch { gateway.capture() } }
-    <span class="k">override fun</span> onVendFailure()                { scope.launch { gateway.refund() } }
-    <span class="k">override fun</span> onSessionEnded()               { <span class="c">/* per-session cleanup */</span> }
-    <span class="k">override fun</span> onVendAborted(reason: VendAbortReason) { scope.launch { gateway.cancelUiAndVoid(); ui.reset() } }  <span class="c">// 7.29.0</span>
+    <span class="k">override fun</span> onVendFailure()                { scope.launch { gateway.cancelUiAndVoid(); <span class="k">if</span> (approved) gateway.refund(); ui.reset() } }  <span class="c">// 8.0.0: every non-success end, exactly once</span>
 }</pre>
 
     <div class="callout warn">
@@ -732,9 +730,10 @@ HardwareLib.vendListener = <span class="k">object</span> : HardwareLib.VendListe
         time out and RESET the reader); exceptions you throw are caught and logged, never fatal;
         <code class="cmd">price</code>/<code class="cmd">itemNumber</code> are the raw 16-bit MDB
         values (<code class="cmd">-1</code> if the VMC omitted the item bytes) — scale price per
-        your READER CONFIG DATA scale factor. Cancelled sessions skip success/failure and go
-        straight to <code class="cmd">onSessionEnded()</code>, which is why refund logic lives in
-        <code class="cmd">onVendFailure</code> and only cleanup lives in the session-end hook.
+        your READER CONFIG DATA scale factor. Every vend request ends in exactly one of
+        <code class="cmd">onVendSuccess</code> or <code class="cmd">onVendFailure</code> (8.0.0) — cancel, jam,
+        walk-away with no cancel at all, reset: all of them are <code class="cmd">onVendFailure</code>, so
+        UI reset and refund logic live in one place.
       </p>
     </div>
   </section>
@@ -771,7 +770,7 @@ HardwareLib.vendListener = <span class="k">object</span> : HardwareLib.VendListe
     <span class="k">val</span> droppedMessages: Long                             <span class="c">// queue-overflow counter</span>
 }</pre>
 
-    <h3>hardware-lib (7.29.0)</h3>
+    <h3>hardware-lib (8.0.0)</h3>
     <pre class="code"><span class="k">object</span> HardwareLib {
     <span class="k">fun</span> init(context: Context)   <span class="c">// MQTT optional: without it HardwareLib runs fully offline</span>
     <span class="k">fun</span> start() / stop()         <span class="c">// open/close the MDB port + worker loop</span>
@@ -807,9 +806,7 @@ HardwareLib.vendListener = <span class="k">object</span> : HardwareLib.VendListe
     <span class="k">interface</span> VendListener {
         <span class="k">fun</span> onVendRequest(amount: Double, minorUnits: Int, itemNumber: Int)
         <span class="k">fun</span> onVendSuccess(itemNumber: Int)
-        <span class="k">fun</span> onVendFailure()
-        <span class="k">fun</span> onSessionEnded()
-        <span class="k">fun</span> onVendAborted(reason: VendAbortReason)   <span class="c">// 7.29.0: unified - exactly once per vend that did not complete</span>
+        <span class="k">fun</span> onVendFailure()   <span class="c">// 8.0.0: THE non-success outcome, exactly once per vend request</span>
     }
     <span class="k">var</span> vendListener: VendListener?
     <span class="k">var</span> logListener: ((line: String, showOnScreen: Boolean) -&gt; Unit)?
@@ -872,7 +869,7 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
         <tr><td>publishLog() spawned <strong>a new thread per message</strong></td><td>One bounded queue + one publisher thread. Producers never block, never race.</td></tr>
         <tr><td>Engine → Activity → MqttBridge; the Activity was the glue</td><td>Engine enqueues directly; the app keeps optional local listeners purely for its own UI.</td></tr>
         <tr><td>One big remote-command <code class="cmd">when</code> in the Activity</td><td>Listener chain: hardware-lib auto-registers, the app adds its own, first-consume-wins.</td></tr>
-        <tr><td>No typed vend events — only log strings</td><td><code class="cmd">VendListener</code>: onVendRequest / onVendSuccess / onVendFailure / onVendCancelled / onSessionEnded / onVendAborted (7.29.0, unified), built for the authorize→capture→refund payment pattern.</td></tr>
+        <tr><td>No typed vend events — only log strings</td><td><code class="cmd">VendListener</code>: onVendRequest / onVendSuccess / onVendFailure (8.0.0: three callbacks, onVendFailure = every non-success end), built for the authorize→capture→refund payment pattern.</td></tr>
         <tr><td>Config text commands parsed in the Activity</td><td>JSON contract handled inside <code class="cmd">MdbConfigStore.applyJson()</code>; legacy text form still accepted, so the existing dashboard needed zero changes.</td></tr>
         <tr><td>Device + simulator flavors</td><td>Simulator removed — real CM30 hardware only.</td></tr>
       </tbody>
@@ -881,7 +878,7 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
     <div class="callout">
       <p>
         <strong>Artifacts:</strong> <code class="cmd">mqtt-lib-2.3.0.aar</code>,
-        <code class="cmd">hardware-lib-7.29.0.aar</code> (plus the bundled CM30 vendor .aar as its
+        <code class="cmd">hardware-lib-8.0.0.aar</code> (plus the bundled CM30 vendor .aar as its
         runtime dependency), the demo APK as the reference integration, and
         <code class="cmd">LIBRARY_README.md</code> for the integrating developer. Wire protocol
         unchanged throughout — the existing <code class="cmd">Hardware Dashboard</code> dashboard
@@ -892,7 +889,7 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
 </main>
 
 <footer>
-  CM30 MDB Slave project — library architecture, as built. Current as of hardware-lib 7.29.0 /
-  mqtt-lib 2.6.0 (demo app v2.13.52, build 100): auto-attach on connect, attachHardware/version
+  CM30 MDB Slave project — library architecture, as built. Current as of hardware-lib 8.0.0 /
+  mqtt-lib 2.6.0 (demo app v2.14.0, build 101): auto-attach on connect, attachHardware/version
   built-ins, passthrough operator channel, retained presence, RS232 + Pulse engines.
 </footer>

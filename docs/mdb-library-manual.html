@@ -131,14 +131,14 @@
     The complete developer manual for <code class="cmd">hardware-lib</code> and
     <code class="cmd">mqtt-lib</code>: every function with a working example, every dashboard
     command, and what actually happens inside when you call each one. Current as of
-    hardware-lib&nbsp;7.29.0 / mqtt-lib&nbsp;2.6.0.
+    hardware-lib&nbsp;8.0.0 / mqtt-lib&nbsp;2.6.0.
   </p>
 
 
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.29.0</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-8.0.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -311,7 +311,7 @@ HardwareLib.addControlListener / removeControlListener</pre>
     <p>Add the AARs (or the Gradle modules) and initialize once at app startup:</p>
     <pre class="code"><span class="c">// build.gradle (raw AARs; skip if using the Gradle modules directly)</span>
 implementation files(<span class="s">'libs/mqtt-lib-2.6.0.aar'</span>)
-implementation files(<span class="s">'libs/hardware-lib-7.29.0.aar'</span>)
+implementation files(<span class="s">'libs/hardware-lib-8.0.0.aar'</span>)
 implementation files(<span class="s">'libs/CM30-HardwareLibrary-1.0.9.aar'</span>)  <span class="c">// hardware-lib's hardware runtime</span></pre>
 
     <pre class="code"><span class="c">// In your Application class or first Activity - the whole startup:</span>
@@ -415,7 +415,7 @@ HardwareLib.stop()</pre>
     <h2><span class="eyebrow">04</span>Vend actions & the payment flow</h2>
 
     <h3><code>HardwareLib.vendListener</code> — the payment hook</h3>
-    <p>Six typed callbacks; override only what you need. <strong>7.29.0: <code>onVendAborted(reason)</code> is the unified "vend did not complete" hook - exactly one per VEND REQUEST that does not reach <code>onVendSuccess</code>, including machines that just end the session with no VEND CANCEL / VEND FAILURE.</strong> Each fires on its own callback thread (7.24.0: a callback that blocks - e.g. waiting for a payment gateway inside <code>onVendRequest</code> - no longer stalls logs, exchange events or later callbacks; <code>onVendCancelled</code> reaches you even while your request handler is stuck, and any callback running longer than 3 s is reported as a warning line). Historically all callbacks shared one queue
+    <p>Three callbacks - <code>onVendRequest</code>, <code>onVendSuccess</code>, <code>onVendFailure</code> - and that is the whole listener (8.0.0). <strong><code>onVendFailure</code> is THE non-success outcome: it fires exactly once for every VEND REQUEST that does not reach <code>onVendSuccess</code> - machine cancel, dispense failure, your own cancel, reset, and machines that just end the session with no VEND CANCEL / VEND FAILURE at all. Every vend ends in exactly one of the two.</strong> Each fires on its own callback thread (7.24.0: a callback that blocks - e.g. waiting for a payment gateway inside <code>onVendRequest</code> - no longer stalls logs, exchange events or later callbacks; <code>onVendFailure</code> reaches you even while your request handler is stuck, and any callback running longer than 3 s is reported as a warning line). Historically all callbacks shared one queue
     (never the bus thread itself — the bus loop only queues the event and goes straight back to
     answering the VMC, so even a slow callback can't make a response miss the machine's
     few-millisecond reply window). Still <strong>return promptly and do gateway work on your own
@@ -445,33 +445,17 @@ HardwareLib.vendListener = <span class="k">object</span> : HardwareLib.VendListe
         scope.launch { paymentGateway.capture() }
     }
 
-    <span class="k">override fun</span> onVendFailure() {
-        <span class="c">// MACHINE-side fact: jam/empty - customer got nothing. Give the money back.</span>
-        scope.launch { paymentGateway.refundOrVoid() }
-    }
-
-    <span class="k">override fun</span> onVendCancelled() {   <span class="c">// NEW in 7.20.0</span>
-        <span class="c">// The MACHINE cancelled (VMC VEND CANCEL 13 01 - customer pressed cancel on the</span>
-        <span class="c">// machine, or it timed out). Fires BEFORE the session closes: dismiss any open</span>
-        <span class="c">// payment UI (gateway popup / card read) and void the hold. Not fired for your</span>
-        <span class="c">// own cancelVend() calls - your code initiated those. A late approveVend() after</span>
-        <span class="c">// this returns false, so nobody can be charged.</span>
-        scope.launch { paymentGateway.cancelInFlightUiAndVoid() }
-    }
-
-    <span class="k">override fun</span> onVendAborted(reason: HardwareLib.VendAbortReason) {   <span class="c">// NEW in 7.29.0</span>
-        <span class="c">// THE UNIFIED "this vend did not complete" hook. Fires exactly once for every VEND</span>
-        <span class="c">// REQUEST that does not end in onVendSuccess: CANCELLED_BY_VMC (13 01 / 14 02),</span>
-        <span class="c">// CANCELLED_BY_APP (your cancelVend), FAILED (13 03), SESSION_ENDED (the machine closed</span>
-        <span class="c">// the session with NO cancel/failure - some VMCs do), RESET. Reset the payment UI here</span>
-        <span class="c">// and it can never stay stuck. SESSION_ENDED after you approved = treat as FAILED.</span>
-        scope.launch { paymentGateway.cancelInFlightUiAndVoid(); resetUiToIdle() }
-    }
-
-    <span class="k">override fun</span> onSessionEnded() {
-        <span class="c">// Fires after EVERY session (sale, decline, jam, cancel, walk-away).</span>
-        <span class="c">// Cleanup only - never money decisions (you can't tell WHY it ended here).</span>
-        clearTransactionState(); resetUiToIdle()
+    <span class="k">override fun</span> onVendFailure() {   <span class="c">// 8.0.0: THE non-success outcome</span>
+        <span class="c">// Fires exactly once for every VEND REQUEST that did not reach onVendSuccess:</span>
+        <span class="c">// machine cancel (13 01 / 14 02), dispense failure (13 03), session ended with the</span>
+        <span class="c">// vend still open (some VMCs send NO cancel/failure), your own cancelVend(), reset.</span>
+        <span class="c">// Dismiss the payment UI, void the hold, refund if you had approved.</span>
+        <span class="c">// HardwareLib.lastVendFailureReason says which case it was.</span>
+        scope.launch {
+            paymentGateway.cancelInFlightUiAndVoid()
+            <span class="k">if</span> (approvedThisVend) paymentGateway.refund()
+            resetUiToIdle()
+        }
     }
 }</pre>
 
@@ -990,9 +974,9 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
         <tr><td><code>setPeripheralVisibility:on|off</code></td><td>log-debug: show traffic addressed to OTHER peripherals (coin changer, bill validator) - independent of the unhandled toggle</td><td>ack + SETTINGS_JSON</td></tr>
         <tr><td><code>getCodebook</code></td><td>answered by mqtt-lib's log layer</td><td>CODEBOOK_JSON snapshot (decode dictionary)</td></tr>
         <tr><td><code>ping</code></td><td>answered by mqtt-lib itself</td><td><code>PONG</code></td></tr>
-        <tr><td><code>version</code> <em>(mqtt-lib 2.3.0)</em></td><td>answered by mqtt-lib itself — reports the library versions actually bundled in the running app</td><td><code>[remote] mqtt-lib 2.6.0, hardware-lib 7.29.0</code></td></tr>
+        <tr><td><code>version</code> <em>(mqtt-lib 2.3.0)</em></td><td>answered by mqtt-lib itself — reports the library versions actually bundled in the running app</td><td><code>[remote] mqtt-lib 2.6.0, hardware-lib 8.0.0</code></td></tr>
         <tr><td><code>attachHardware</code> <em>(mqtt-lib 2.3.0)</em></td><td>answered by mqtt-lib itself — wires hardware-lib's remote commands + log stream on demand (the rescue for an app that never called <code>attachRabbahMqtt()</code>; auto-runs on connect by default)</td><td><code>[remote] hardware-lib attached …</code> or the reason it can't (absent / older than 7.16.0)</td></tr>
-        <tr><td><code>detachHardware</code> <em>(mqtt-lib 2.5.0 / hardware-lib 7.29.0)</em></td><td>the true disconnect — removes every listener attach wired (hardware logs stop, hardware commands stop answering; ping/version/attachHardware still work). <code>attachHardware</code> re-wires; an app restart auto-attaches again. The dashboard's HW toggle switch drives this pair; the Logs toggle drives <code>setMqttLogging:on|off</code></td><td><code>[remote] hardware-lib DETACHED …</code></td></tr>
+        <tr><td><code>detachHardware</code> <em>(mqtt-lib 2.5.0 / hardware-lib 8.0.0)</em></td><td>the true disconnect — removes every listener attach wired (hardware logs stop, hardware commands stop answering; ping/version/attachHardware still work). <code>attachHardware</code> re-wires; an app restart auto-attaches again. The dashboard's HW toggle switch drives this pair; the Logs toggle drives <code>setMqttLogging:on|off</code></td><td><code>[remote] hardware-lib DETACHED …</code></td></tr>
         <tr><td><em>anything else</em></td><td>offered to the app's own listeners first</td><td><code>[remote] unknown command: …</code> if nobody consumed it</td></tr>
       </tbody>
     </table></div>
@@ -1017,6 +1001,6 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
 </main>
 
 <footer>
-  CM30 MDB Slave project — developer manual. hardware-lib 7.29.0 · mqtt-lib 2.6.0 · demo app v2.13.52 (build 100). Companion docs: the architecture reference and the interactive vend simulator.
+  CM30 MDB Slave project — developer manual. hardware-lib 8.0.0 · mqtt-lib 2.6.0 · demo app v2.14.0 (build 101). Companion docs: the architecture reference and the interactive vend simulator.
 </footer>
 

@@ -150,7 +150,7 @@
     <li>Nothing else. The three AARs (<code>hardware-lib</code>, <code>mqtt-lib</code>,
         <code>CM30-HardwareLibrary-1.0.9</code>) are bundled inside the package's <code>android/libs</code>
         &mdash; drop-in upgradable: replace them with the latest from the Hardware-Library repo
-        (<code>hardware-lib-7.29.0.aar</code> + <code>mqtt-lib-2.6.0.aar</code>) and rebuild;
+        (<code>hardware-lib-8.0.0.aar</code> + <code>mqtt-lib-2.6.0.aar</code>) and rebuild;
         no JS or bridge changes. mqtt-lib 2.3.0+ auto-attaches hardware-lib on the first broker
         connection and answers the <code>version</code> / <code>attachHardware</code> dashboard
         commands by itself.</li>
@@ -194,8 +194,9 @@ const subs = [
     else    await Mdb.cancelVend();          // sends the standing cancel mode
   }),
   Mdb.onVendSuccess(({ itemNumber }) => gateway.capture()),  // product dispensed
-  Mdb.onVendFailure(() => gateway.refund()),                 // jam - customer got nothing
-  Mdb.onSessionEnded(() => clearTransactionState()),         // fires after EVERY outcome
+  Mdb.onVendFailure(({ reason }) => {                       // EVERY non-success end, exactly once (8.0.0)
+    gateway.cancelUiAndVoid(); if (approved) gateway.refund(); resetUi();   // reason: CANCELLED_BY_VMC | FAILED | SESSION_ENDED | ...
+  }),
 ];
 // on unmount: subs.forEach(s => s.remove());</code></pre>
   <ul>
@@ -205,10 +206,10 @@ const subs = [
         already applied &mdash; no math on your side.</li>
     <li><strong>onVendSuccess</strong> &mdash; the machine confirmed the product physically dispensed.
         This is the capture point.</li>
-    <li><strong>onVendFailure</strong> &mdash; the machine reported the vend failed after approval
-        (jam, empty column). The customer got nothing: refund or void.</li>
-    <li><strong>onSessionEnded</strong> &mdash; the session closed, on every path (success, failure,
-        cancel, timeout). Per-transaction cleanup goes here.</li>
+    <li><strong>onVendFailure</strong> &mdash; every end of a vend that is not a success, exactly once
+        (hardware-lib 8.0.0): machine cancel, dispense failure, session ended with the vend still open,
+        your own cancel, reset. <code>reason</code> says which. Dismiss the payment UI, void the hold,
+        refund if you had approved. <code>onSessionEnded</code> is no longer emitted.</li>
   </ul>
   <p>
     <code>cancelVend()</code> uses the standing mode set once via
@@ -305,8 +306,7 @@ await Mdb.isMachineReady();                 // digital-in check now - sendPulse 
     <tr><th>Event</th><th>Payload</th><th>When</th></tr>
     <tr><td><span class="pill event">onVendRequest</span></td><td><code>{ amount, minorUnits, itemNumber }</code></td><td>Customer picked an item; the machine is waiting for approve/deny.</td></tr>
     <tr><td><span class="pill event">onVendSuccess</span></td><td><code>{ itemNumber }</code></td><td>Product physically dispensed &mdash; capture the payment.</td></tr>
-    <tr><td><span class="pill event">onVendFailure</span></td><td>&mdash;</td><td>Vend failed after approval &mdash; refund.</td></tr>
-    <tr><td><span class="pill event">onSessionEnded</span></td><td>&mdash;</td><td>Session closed, on every outcome &mdash; cleanup.</td></tr>
+    <tr><td><span class="pill event">onVendFailure</span></td><td><code>{ reason }</code></td><td>Every non-success end of a vend, exactly once (8.0.0): CANCELLED_BY_VMC, CANCELLED_BY_APP, FAILED, SESSION_ENDED, RESET &mdash; reset UI, void, refund if approved.</td></tr>
     <tr><td><span class="pill event">onLog</span></td><td><code>{ line, showOnScreen }</code></td><td>Every engine log line. Never render <code>showOnScreen: false</code> lines into a growing list.</td></tr>
     <tr><td><span class="pill event">onStatus</span></td><td><code>{ json }</code></td><td>VMC status &mdash; instantly on every state change, plus a recentActivity flip (event-driven, no periodic heartbeat).</td></tr>
     <tr><td><span class="pill event">onRemoteCommand</span></td><td><code>{ command }</code></td><td>A dashboard command the MDB engine did not recognize &mdash; your app's own custom commands arrive here.</td></tr>
@@ -373,5 +373,5 @@ cd android && ./gradlew assembleRelease
 </main>
 
 <footer>
-  react-native-mdb v1.0.0 &middot; bundled AARs drop-in upgradable (latest: hardware-lib 7.29.0 + mqtt-lib 2.5.0 with auto-attach) + CM30-HardwareLibrary 1.0.9 &middot; Android / armeabi-v7a
+  react-native-mdb v1.0.0 &middot; bundled AARs drop-in upgradable (latest: hardware-lib 8.0.0 + mqtt-lib 2.5.0 with auto-attach) + CM30-HardwareLibrary 1.0.9 &middot; Android / armeabi-v7a
 </footer>

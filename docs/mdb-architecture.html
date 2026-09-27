@@ -297,7 +297,7 @@
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.29.0</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-8.0.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -888,7 +888,7 @@ HardwareLib.exchangeListener = { e -&gt;                               <span cla
 </main>
 
 <footer>
-  CM30 MDB Slave project. Current as of app v2.13.52 (build 100) / hardware-lib 7.29.0 / mqtt-lib 2.5.0: auto-attach + attachHardware/version built-ins, passthrough operator channel, compact RabbahLog codebook envelope (MDB 110–136 + RS232 137–143, one unified code space since mqtt-lib 2.4.0), generic RabbahMqtt API, broker auth, backend-contract topic suffixes, retained online/offline presence (birth + LWT), two-thread timing
+  CM30 MDB Slave project. Current as of app v2.14.0 (build 101) / hardware-lib 8.0.0 / mqtt-lib 2.5.0: auto-attach + attachHardware/version built-ins, passthrough operator channel, compact RabbahLog codebook envelope (MDB 110–136 + RS232 137–143, one unified code space since mqtt-lib 2.4.0), generic RabbahMqtt API, broker auth, backend-contract topic suffixes, retained online/offline presence (birth + LWT), two-thread timing
   engine (bus + offload), JUST RESET consumed once setup starts, order-independent setup retries,
   REVALUE handling, and variable-length BEGIN SESSION payloads. Handshakes and bit layouts
   verified against the MDB/ICP v4.3 specification and against real machine traces.

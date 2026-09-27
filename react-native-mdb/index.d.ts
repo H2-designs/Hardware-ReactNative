@@ -85,7 +85,9 @@ declare const Mdb: {
 
   onVendRequest(fn: (e: VendRequestEvent) => void): EmitterSubscription;
   onVendSuccess(fn: (e: { itemNumber: number }) => void): EmitterSubscription;
-  onVendFailure(fn: () => void): EmitterSubscription;
+  /** hardware-lib 8.0.0: fires exactly once for every vend request that did not reach onVendSuccess. */
+  onVendFailure(fn: (e: { reason: 'CANCELLED_BY_VMC' | 'CANCELLED_BY_APP' | 'FAILED' | 'SESSION_ENDED' | 'RESET' | 'UNKNOWN' }) => void): EmitterSubscription;
+  /** @deprecated no longer emitted since hardware-lib 8.0.0 - use onVendSuccess / onVendFailure. */
   onSessionEnded(fn: () => void): EmitterSubscription;
   onLog(fn: (e: { line: string; showOnScreen: boolean }) => void): EmitterSubscription;
   onStatus(fn: (e: { json: string }) => void): EmitterSubscription;

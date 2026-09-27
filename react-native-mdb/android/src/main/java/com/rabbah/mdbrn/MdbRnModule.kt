@@ -163,8 +163,13 @@ class MdbRnModule(private val reactContext: ReactApplicationContext) :
                 map.putInt("itemNumber", itemNumber)
                 emit("MdbVendSuccess", map)
             }
-            override fun onVendFailure() = emit("MdbVendFailure", Arguments.createMap())
-            override fun onSessionEnded() = emit("MdbSessionEnded", Arguments.createMap())
+            // hardware-lib 8.0.0: onVendFailure is the ONE non-success outcome (machine cancel,
+            // dispense failure, session ended with the vend open, app cancel, reset).
+            override fun onVendFailure() {
+                val map = Arguments.createMap()
+                map.putString("reason", MdbLib.lastVendFailureReason?.name ?: "UNKNOWN")
+                emit("MdbVendFailure", map)
+            }
         }
 
         MdbLib.logListener = { line, showOnScreen ->
