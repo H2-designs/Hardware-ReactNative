@@ -235,7 +235,7 @@
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.17.0</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-7.28.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -770,7 +770,7 @@ HardwareLib.vendListener = <span class="k">object</span> : HardwareLib.VendListe
     <span class="k">val</span> droppedMessages: Long                             <span class="c">// queue-overflow counter</span>
 }</pre>
 
-    <h3>hardware-lib (7.17.0)</h3>
+    <h3>hardware-lib (7.28.0)</h3>
     <pre class="code"><span class="k">object</span> HardwareLib {
     <span class="k">fun</span> init(context: Context)   <span class="c">// MQTT optional: without it HardwareLib runs fully offline</span>
     <span class="k">fun</span> start() / stop()         <span class="c">// open/close the MDB port + worker loop</span>
@@ -879,7 +879,7 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
     <div class="callout">
       <p>
         <strong>Artifacts:</strong> <code class="cmd">mqtt-lib-2.3.0.aar</code>,
-        <code class="cmd">hardware-lib-7.17.0.aar</code> (plus the bundled CM30 vendor .aar as its
+        <code class="cmd">hardware-lib-7.28.0.aar</code> (plus the bundled CM30 vendor .aar as its
         runtime dependency), the demo APK as the reference integration, and
         <code class="cmd">LIBRARY_README.md</code> for the integrating developer. Wire protocol
         unchanged throughout — the existing <code class="cmd">Hardware Dashboard</code> dashboard
@@ -890,7 +890,7 @@ MqttLib.enqueue(<span class="s">"[app] payment gateway responded in 420ms"</span
 </main>
 
 <footer>
-  CM30 MDB Slave project — library architecture, as built. Current as of hardware-lib 7.17.0 /
-  mqtt-lib 2.4.0 (demo app v2.13.36, build 84): auto-attach on connect, attachHardware/version
+  CM30 MDB Slave project — library architecture, as built. Current as of hardware-lib 7.28.0 /
+  mqtt-lib 2.6.0 (demo app v2.13.51, build 99): auto-attach on connect, attachHardware/version
   built-ins, passthrough operator channel, retained presence, RS232 + Pulse engines.
 </footer>

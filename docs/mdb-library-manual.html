@@ -131,14 +131,14 @@
     The complete developer manual for <code class="cmd">hardware-lib</code> and
     <code class="cmd">mqtt-lib</code>: every function with a working example, every dashboard
     command, and what actually happens inside when you call each one. Current as of
-    hardware-lib&nbsp;7.17.0 / mqtt-lib&nbsp;2.4.0.
+    hardware-lib&nbsp;7.28.0 / mqtt-lib&nbsp;2.6.0.
   </p>
 
 
   <!-- ============================================================ -->
   <section id="split700">
     <h2><span class="eyebrow">NEW &mdash; the 7.x split</span>hardware-lib: the MDB engine, MQTT-free</h2>
-    <p><strong>mdb-lib is now <code>hardware-lib-7.17.0</code></strong> &mdash; renamed, and with the
+    <p><strong>mdb-lib is now <code>hardware-lib-7.28.0</code></strong> &mdash; renamed, and with the
     entire MQTT layer removed from inside it. The engine is pure hardware/protocol: everything it
     produces exits through listeners, everything it accepts enters through plain functions.
     The Kotlin package stays <code>com.rabbah.mdb</code> and a deprecated
@@ -310,8 +310,8 @@ HardwareLib.addControlListener / removeControlListener</pre>
     <h2><span class="eyebrow">01</span>Getting started</h2>
     <p>Add the AARs (or the Gradle modules) and initialize once at app startup:</p>
     <pre class="code"><span class="c">// build.gradle (raw AARs; skip if using the Gradle modules directly)</span>
-implementation files(<span class="s">'libs/mqtt-lib-2.4.0.aar'</span>)
-implementation files(<span class="s">'libs/hardware-lib-7.17.0.aar'</span>)
+implementation files(<span class="s">'libs/mqtt-lib-2.6.0.aar'</span>)
+implementation files(<span class="s">'libs/hardware-lib-7.28.0.aar'</span>)
 implementation files(<span class="s">'libs/CM30-HardwareLibrary-1.0.9.aar'</span>)  <span class="c">// hardware-lib's hardware runtime</span></pre>
 
     <pre class="code"><span class="c">// In your Application class or first Activity - the whole startup:</span>
@@ -415,7 +415,7 @@ HardwareLib.stop()</pre>
     <h2><span class="eyebrow">04</span>Vend actions & the payment flow</h2>
 
     <h3><code>HardwareLib.vendListener</code> — the payment hook</h3>
-    <p>Four typed callbacks; override only what you need. All fire on a dedicated callback thread
+    <p>Four typed callbacks; override only what you need. Each fires on its own callback thread (7.24.0: a callback that blocks - e.g. waiting for a payment gateway inside <code>onVendRequest</code> - no longer stalls logs, exchange events or later callbacks; <code>onVendCancelled</code> reaches you even while your request handler is stuck, and any callback running longer than 3 s is reported as a warning line). Historically all callbacks shared one queue
     (never the bus thread itself — the bus loop only queues the event and goes straight back to
     answering the VMC, so even a slow callback can't make a response miss the machine's
     few-millisecond reply window). Still <strong>return promptly and do gateway work on your own
@@ -448,6 +448,15 @@ HardwareLib.vendListener = <span class="k">object</span> : HardwareLib.VendListe
     <span class="k">override fun</span> onVendFailure() {
         <span class="c">// MACHINE-side fact: jam/empty - customer got nothing. Give the money back.</span>
         scope.launch { paymentGateway.refundOrVoid() }
+    }
+
+    <span class="k">override fun</span> onVendCancelled() {   <span class="c">// NEW in 7.20.0</span>
+        <span class="c">// The MACHINE cancelled (VMC VEND CANCEL 13 01 - customer pressed cancel on the</span>
+        <span class="c">// machine, or it timed out). Fires BEFORE the session closes: dismiss any open</span>
+        <span class="c">// payment UI (gateway popup / card read) and void the hold. Not fired for your</span>
+        <span class="c">// own cancelVend() calls - your code initiated those. A late approveVend() after</span>
+        <span class="c">// this returns false, so nobody can be charged.</span>
+        scope.launch { paymentGateway.cancelInFlightUiAndVoid() }
     }
 
     <span class="k">override fun</span> onSessionEnded() {
@@ -553,6 +562,30 @@ HardwareLib.logListener = { line, showOnScreen -&gt;
     session so the new mode applies immediately; switching while merely enabled arms/disarms on
     the spot. <em>Dashboard: <code class="cmd">setSessionMode:auto|manual</code>.</em></p>
 
+    <h3><code>HardwareLib.setDirectVend(enabled: Boolean)</code> · <code>HardwareLib.isDirectVend</code> <em>(7.28.0)</em></h3>
+    <p>Default <code class="cmd">false</code>: a VEND REQUEST is only accepted inside a session, after READER ENABLE and
+    SESSION BEGIN, as the spec requires. <code class="cmd">true</code>: a VEND REQUEST (<code class="cmd">13 00</code>)
+    arriving in INACTIVE, DISABLED or ENABLED state is accepted too - the engine ACKs, captures price and item,
+    jumps straight to the session state, logs <code class="cmd">[mdb] VEND REQUEST accepted directly in &lt;STATE&gt;</code>
+    and fires <code class="cmd">onVendRequest</code>; <code class="cmd">approveVend()</code> / <code class="cmd">cancelVend()</code>
+    and the rest of the vend flow are unchanged. For machines that skip the handshake and send the request immediately.
+    Persisted. <em>Dashboard: the <strong>Direct Vend</strong> toggle, or <code class="cmd">setDirectVend:on|off</code>;
+    reported as <code class="cmd">directVend</code> in SETTINGS_JSON.</em></p>
+
+    <h3><code>HardwareLib.setAutoBeginCooldown(polls: Int)</code> · <code>HardwareLib.autoBeginCooldown</code> <em>(7.25.0)</em></h3>
+    <p>Auto mode only. How many idle POLLs the engine waits after END SESSION before it re-arms
+    SESSION BEGIN. Default <code class="cmd">3</code> (about 300&ndash;600 ms); range 0&ndash;50;
+    persisted. Why it exists: some VMCs (Sielaff) send their post-session READER ENABLE
+    (<code class="cmd">14 01</code>) <em>after</em> their first POLL. Before 7.25.0 auto mode armed on that
+    first POLL, so the READER ENABLE arrived while a session was already open, went unanswered, and
+    the VMC retried it forever (<code class="cmd">UNHANDLED rx=14 01 15</code> until Close/Open). A
+    READER ENABLE arriving during the cooldown arms immediately, so the wait is never longer than it
+    needs to be. <code class="cmd">0</code> restores the old next-POLL behavior. Also since 7.25.0
+    READER ENABLE / DISABLE / CANCEL are answered inside a session too.
+    <em>Dashboard: the <strong>cooldown</strong> field next to the mode selector, or
+    <code class="cmd">setAutoBeginCooldown:N</code>; reported as <code class="cmd">autoBeginCooldownPolls</code>
+    in SETTINGS_JSON.</em></p>
+
     <h3><code>HardwareLib.setMdbLevel(level: Int)</code> — 1, 2, or 3</h3>
     <p>Changes which setup handshake runs, the feature level reported in READER CONFIG DATA, and
     which BEGIN SESSION / PERIPHERAL ID payloads are sent. Level 1: shortest, no EXPANSION
@@ -569,6 +602,10 @@ HardwareLib.logListener = { line, showOnScreen -&gt;
 
     <h3><code>HardwareLib.setMqttLogging(enabled: Boolean)</code> · <code>isMqttLoggingEnabled</code></h3>
     <p>Master on/off for publishing the engine's <strong>log lines</strong> over MQTT. Persisted.
+    <strong>OFF by default since 7.23.0</strong> (fleet decision — a device never streams remote
+    logs until an operator turns them on: the dashboard's Logs toggle / <code>setMqttLogging:on</code>).
+    Settings also work without <code>HardwareLib.init()</code> since 7.23.0 (in-memory, with a
+    one-time warning line) — call <code>init(context)</code> at app start so they persist.
     While OFF: the local <code class="cmd">logListener</code> still gets every line (your
     on-device log keeps working), and the <strong>control plane keeps publishing</strong> —
     VMC_STATUS status events, SETTINGS_JSON, CONFIG_JSON, PONG — so the dashboard still sees the
@@ -695,6 +732,33 @@ Rs232Lib.vendRequestListener = { price, frame -&gt; <span class="c">/* charge, t
     wired, the plain <code>[rs232] ...</code> twin stays LOCAL-only (each exchange crosses the
     wire exactly once); with none, plain lines ship as before. <code>getCodebook</code> now
     serves the RS232 schema, so dashboards decode it with zero changes.</p>
+    <p><strong>One listener, MDB-style (7.22.0)</strong> &mdash;
+    <code>Rs232Lib.exchangeListener</code> now fires for EVERY coded event (137&ndash;143:
+    frames, manual TX, CRC discards, port open/close, rule loads) and its
+    <code>Rs232Exchange</code> carries the full MDB-style surface: <code>e.code</code>
+    (137&ndash;143, same numbers as the wire), <code>e.eventName</code>, <code>e.params</code>
+    (the wire p[] arrays), <code>e.message</code> (the dashboard-identical sentence), plus the
+    frame fields <code>e.rxHex</code> / <code>e.ruleName</code> (null = unmatched) /
+    <code>e.txHex</code> (null = nothing sent) / <code>e.price</code> (-1 = no price). One
+    listener feeds a logging pipeline AND business logic, exactly like
+    <code>HardwareLib.exchangeListener</code> does for MDB:</p>
+    <pre class="code">Rs232Lib.exchangeListener = { e -&gt;
+    scope.launch {                             <span class="c">// reader thread - hand off, never block</span>
+        myLogger.emit(
+            messageCode  = e.code.toString(),  <span class="c">// "137".."143" - same numbers as the wire</span>
+            paramsCount  = e.params.size,
+            params       = e.params,
+            localMessage = e.message,          <span class="c">// the human sentence, dashboard-identical</span>
+        )
+        <span class="k">when</span> {
+            e.code == <span class="s">139</span>            -&gt; alert(<span class="s">"corrupt frame ${e.rxHex}"</span>)
+            e.ruleName == <span class="s">"CANCEL"</span>   -&gt; { nearpay.cancel(); gateway.voidHold() }
+            e.price &gt;= <span class="s">0</span>             -&gt; charge(e.price)   <span class="c">// payment frame</span>
+        }
+    }
+}
+<span class="c">// Rs232Cmd.fromCode(137) / fromEventName(...) / .template / .paramCount also public;</span>
+<span class="c">// HardwareLib.addRs232EventListener(name, params) still works for multi-consumer setups</span></pre>
     <p><strong>Testing without the machine</strong>: <code>Rs232Lib.simulateFrame(hex)</code>
     feeds a fake received frame through the matcher exactly as if the machine sent it -
     matching, price extraction and both listeners all run; the reply is really written when the
@@ -812,7 +876,7 @@ RABBAH_LOG:{"t":"1787743651002","s":"MDB","m":"13","a":"vending-app","v":"2.13.5
         <tr><td><code>commandTopicSuffix</code></td><td><code>"commands"</code></td><td>Backend command channel (ack/progress flow lives here). <strong>Fleet contract: <code>"cmd"</code></strong>.</td></tr>
         <tr><td><code>statusTopicSuffix</code></td><td><code>null</code></td><td>Presence. When set (<strong>fleet: <code>"status"</code></strong>): retained <code>online</code> on every connect, broker publishes retained <code>offline</code> via Last Will on drop, graceful <code>stop()</code> publishes <code>offline</code> itself. Null = no presence traffic.</td></tr>
         <tr><td><code>passthroughTopicSuffix</code></td><td><code>"passthrough"</code></td><td>The operator/dashboard command channel (2.1.0+), kept SEPARATE from the backend-owned cmd topic; same listener chain. <strong>Leave the default</strong> — the dashboard publishes to <code>passthrough</code>, so renaming it (or the <code>passtrough</code> misspelling) silently breaks all remote control. Null disables it.</td></tr>
-        <tr><td><code>autoAttachHardware</code></td><td><code>true</code></td><td><strong>New in 2.3.0.</strong> On the first successful connection mqtt-lib reflectively runs <code>HardwareLib.attachRabbahMqtt()</code> — hardware-lib's logs and remote commands go live with ZERO app wiring. A no-op when hardware-lib is absent (pure-MQTT apps) or older than 7.16.0. <strong>Leave it on</strong>; turning it off recreates the "device answers ping but nothing else" fleet bug.</td></tr>
+        <tr><td><code>autoAttachHardware</code></td><td><code>false</code> <em>(2.6.0; was true 2.3.0–2.5.x)</em></td><td>When true, the first successful connection reflectively runs <code>HardwareLib.attachRabbahMqtt()</code> so hardware-lib's logs and commands are live with zero app wiring. <strong>Default false since 2.6.0 (fleet decision — nothing turns on by itself):</strong> a device boots unattached and silent; the operator wires it on demand with the dashboard HW toggle (<code>attachHardware</code>, answered by mqtt-lib itself so it always works) and a restart drops it again. <code>ping</code> / <code>version</code> / <code>attachHardware</code> work either way.</td></tr>
       </tbody>
     </table></div>
 
@@ -902,6 +966,10 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
         <tr><td><code>cancelVend:sessionCancel</code> / <code>:vendDenied</code></td><td>cancel with that exact response</td><td>same</td></tr>
         <tr><td><code>setCancelMode:sessionCancel</code> / <code>:vendDenied</code></td><td>sets the standing cancel response</td><td>ack + SETTINGS_JSON</td></tr>
         <tr><td><code>setSessionMode:auto</code> / <code>:manual</code></td><td>setAutoSession(true/false)</td><td>ack + SETTINGS_JSON</td></tr>
+        <tr><td><code>initPulse:true</code> / <code>:false</code> <em>(persisted 7.27.0)</em></td><td>PulseLib.initPulse(high) - HIGH pulses idle LOW / LOW pulses idle HIGH; remembered as <code>pulseMode</code> and re-applied by HardwareLib.init()</td><td>[pulse] mode=... + SETTINGS_JSON. Dashboard: Init High / Init Low + mode label</td></tr>
+        <tr><td><code>setReadyFeedback:[yes,]value[,channel]</code> / <code>:on</code> / <code>:off</code> <em>(persisted 7.26.0)</em></td><td>PulseLib.setReadyFeedback(value, channel) / enableReadyFeedback() / setReadyFeedback(null)</td><td>[pulse] line + SETTINGS_JSON (readyFeedbackEnabled/Value/Channel). Dashboard: Ready FB toggle</td></tr>
+        <tr><td><code>setDirectVend:on</code> / <code>:off</code> <em>(7.28.0)</em></td><td>setDirectVend(true/false) - accept a VEND REQUEST in ANY state (INACTIVE/DISABLED/ENABLED) for VMCs that skip the handshake; default off</td><td>[remote] direct vend ON/OFF + SETTINGS_JSON (directVend). Dashboard: Direct Vend toggle</td></tr>
+        <tr><td><code>setAutoBeginCooldown:N</code> <em>(7.25.0)</em></td><td>setAutoBeginCooldown(N) - idle POLLs after END SESSION before auto SESSION BEGIN, 0-50, default 3</td><td>ack + SETTINGS_JSON</td></tr>
         <tr><td><code>setMdbLevel:1|2|3</code></td><td>setMdbLevel(n)</td><td>ack + SETTINGS_JSON</td></tr>
         <tr><td><code>setMqttLogging:on|off</code></td><td>mute/unmute the log stream over MQTT (control plane stays active)</td><td>ack + SETTINGS_JSON</td></tr>
         <tr><td><code>setPollVisibility:on|off</code> / <code>setUnhandledVisibility:on|off</code></td><td>log-debug toggles</td><td>ack + SETTINGS_JSON</td></tr>
@@ -913,8 +981,9 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
         <tr><td><code>setPeripheralVisibility:on|off</code></td><td>log-debug: show traffic addressed to OTHER peripherals (coin changer, bill validator) - independent of the unhandled toggle</td><td>ack + SETTINGS_JSON</td></tr>
         <tr><td><code>getCodebook</code></td><td>answered by mqtt-lib's log layer</td><td>CODEBOOK_JSON snapshot (decode dictionary)</td></tr>
         <tr><td><code>ping</code></td><td>answered by mqtt-lib itself</td><td><code>PONG</code></td></tr>
-        <tr><td><code>version</code> <em>(mqtt-lib 2.3.0)</em></td><td>answered by mqtt-lib itself — reports the library versions actually bundled in the running app</td><td><code>[remote] mqtt-lib 2.4.0, hardware-lib 7.17.0</code></td></tr>
+        <tr><td><code>version</code> <em>(mqtt-lib 2.3.0)</em></td><td>answered by mqtt-lib itself — reports the library versions actually bundled in the running app</td><td><code>[remote] mqtt-lib 2.6.0, hardware-lib 7.28.0</code></td></tr>
         <tr><td><code>attachHardware</code> <em>(mqtt-lib 2.3.0)</em></td><td>answered by mqtt-lib itself — wires hardware-lib's remote commands + log stream on demand (the rescue for an app that never called <code>attachRabbahMqtt()</code>; auto-runs on connect by default)</td><td><code>[remote] hardware-lib attached …</code> or the reason it can't (absent / older than 7.16.0)</td></tr>
+        <tr><td><code>detachHardware</code> <em>(mqtt-lib 2.5.0 / hardware-lib 7.28.0)</em></td><td>the true disconnect — removes every listener attach wired (hardware logs stop, hardware commands stop answering; ping/version/attachHardware still work). <code>attachHardware</code> re-wires; an app restart auto-attaches again. The dashboard's HW toggle switch drives this pair; the Logs toggle drives <code>setMqttLogging:on|off</code></td><td><code>[remote] hardware-lib DETACHED …</code></td></tr>
         <tr><td><em>anything else</em></td><td>offered to the app's own listeners first</td><td><code>[remote] unknown command: …</code> if nobody consumed it</td></tr>
       </tbody>
     </table></div>
@@ -939,6 +1008,6 @@ MqttLib.droppedMessages   <span class="c">// lost to queue overflow - rising = o
 </main>
 
 <footer>
-  CM30 MDB Slave project — developer manual. hardware-lib 7.17.0 · mqtt-lib 2.4.0 · demo app v2.13.36 (build 84). Companion docs: the architecture reference and the interactive vend simulator.
+  CM30 MDB Slave project — developer manual. hardware-lib 7.28.0 · mqtt-lib 2.6.0 · demo app v2.13.51 (build 99). Companion docs: the architecture reference and the interactive vend simulator.
 </footer>
 
