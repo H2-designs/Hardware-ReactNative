@@ -87,7 +87,9 @@ declare const Mdb: {
   onVendSuccess(fn: (e: { itemNumber: number }) => void): EmitterSubscription;
   /** hardware-lib 8.0.0: fires exactly once for every vend request that did not reach onVendSuccess.
    *  8.2.5: EVERY cancel is delivered, the reason says who cancelled - CANCELLED_BY_VMC (machine),
-   *  CANCELLED_BY_APP (your own cancelVend), CANCELLED_BY_OPERATOR (dashboard / remote command). */
+   *  CANCELLED_BY_APP (your own cancelVend), CANCELLED_BY_OPERATOR (dashboard / remote command).
+   *  8.2.6: delivered in order - for one vend this event always arrives after its onVendRequest handler returned;
+   *  the reason is captured when the vend was closed, never read later. */
   onVendFailure(fn: (e: { reason: 'CANCELLED_BY_VMC' | 'CANCELLED_BY_APP' | 'CANCELLED_BY_OPERATOR' | 'FAILED' | 'SESSION_ENDED' | 'RESET' | 'UNKNOWN' }) => void): EmitterSubscription;
   /** @deprecated no longer emitted since hardware-lib 8.0.0 - use onVendSuccess / onVendFailure. */
   onSessionEnded(fn: () => void): EmitterSubscription;

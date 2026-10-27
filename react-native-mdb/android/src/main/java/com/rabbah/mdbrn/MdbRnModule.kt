@@ -165,9 +165,11 @@ class MdbRnModule(private val reactContext: ReactApplicationContext) :
             }
             // hardware-lib 8.0.0: onVendFailure is the ONE non-success outcome (machine cancel,
             // dispense failure, session ended with the vend open, app cancel, reset).
-            override fun onVendFailure() {
+            // hardware-lib 8.2.6: the reason arrives with the callback (captured when the vend was closed),
+            // so it can no longer be overwritten by a later failure before it is read.
+            override fun onVendFailure(reason: com.rabbah.mdb.HardwareLib.VendFailureReason) {
                 val map = Arguments.createMap()
-                map.putString("reason", MdbLib.lastVendFailureReason?.name ?: "UNKNOWN")
+                map.putString("reason", reason.name)
                 emit("MdbVendFailure", map)
             }
         }
