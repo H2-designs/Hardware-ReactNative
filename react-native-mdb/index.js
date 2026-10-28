@@ -87,6 +87,12 @@ const Mdb = {
   /** mode: 'sessionCancel' | 'vendDenied' - set ONCE, then cancelVend() is enough. */
   setCancelMode: (mode) => MdbRn.setCancelMode(mode),
   setAutoSession: (enabled) => MdbRn.setAutoSession(enabled),
+  /** 8.2.11: minimum ms between two vend events reaching JS (0 = off, max 5000, default 500). Persisted on the device. */
+  setVendEventGap: (ms) => MdbRn.setVendEventGap(ms),
+  getVendEventGap: () => MdbRn.getVendEventGap(),
+  /** 8.2.7: a vend failure within windowMs of its request is delivered delayMs later (default 200, 500; 0,0 = off). */
+  setCancelGrace: (windowMs, delayMs) => MdbRn.setCancelGrace(windowMs, delayMs),
+  getCancelGrace: () => MdbRn.getCancelGrace(),
   isAutoSession: () => MdbRn.isAutoSession(),
   setMdbLevel: (level) => MdbRn.setMdbLevel(level),
   setMqttLogging: (enabled) => MdbRn.setMqttLogging(enabled),

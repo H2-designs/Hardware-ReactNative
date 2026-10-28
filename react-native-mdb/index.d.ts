@@ -57,6 +57,12 @@ declare const Mdb: {
 
   setCancelMode(mode: CancelMode): void;
   setAutoSession(enabled: boolean): Promise<boolean>;
+  /** 8.2.11: minimum ms between two vend events reaching JS (0 = off, max 5000, default 500). Persisted on the device. */
+  setVendEventGap(ms: number): Promise<boolean>;
+  getVendEventGap(): Promise<number>;
+  /** 8.2.7: a vend failure within windowMs of its request is delivered delayMs later (default 200, 500; 0,0 = off). */
+  setCancelGrace(windowMs: number, delayMs: number): Promise<boolean>;
+  getCancelGrace(): Promise<{ windowMs: number; delayMs: number }>;
   isAutoSession(): Promise<boolean>;
   setMdbLevel(level: 1 | 2 | 3): Promise<boolean>;
   setMqttLogging(enabled: boolean): Promise<boolean>;

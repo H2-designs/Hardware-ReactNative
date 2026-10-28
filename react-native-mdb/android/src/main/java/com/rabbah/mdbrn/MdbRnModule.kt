@@ -232,6 +232,16 @@ class MdbRnModule(private val reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod fun setAutoSession(enabled: Boolean, promise: Promise) = promise.resolve(MdbLib.setAutoSession(enabled))
+    /** 8.2.11: minimum ms between two vend events reaching JS (0 = off, max 5000). Persisted. */
+    @ReactMethod fun setVendEventGap(ms: Int, promise: Promise) = promise.resolve(MdbLib.setVendEventGap(ms))
+    @ReactMethod fun getVendEventGap(promise: Promise) = promise.resolve(MdbLib.vendEventGap)
+    /** 8.2.7: a vend failure within windowMs of its request is delivered delayMs later (0,0 = off). Persisted. */
+    @ReactMethod fun setCancelGrace(windowMs: Int, delayMs: Int, promise: Promise) = promise.resolve(MdbLib.setCancelGrace(windowMs, delayMs))
+    @ReactMethod fun getCancelGrace(promise: Promise) {
+        val m = com.facebook.react.bridge.Arguments.createMap()
+        m.putInt("windowMs", MdbLib.cancelGraceWindow); m.putInt("delayMs", MdbLib.cancelGraceDelay)
+        promise.resolve(m)
+    }
     @ReactMethod fun isAutoSession(promise: Promise) = promise.resolve(MdbLib.isAutoSession)
     @ReactMethod fun setMdbLevel(level: Int, promise: Promise) = promise.resolve(MdbLib.setMdbLevel(level))
     @ReactMethod fun setMqttLogging(enabled: Boolean, promise: Promise) = promise.resolve(MdbLib.setMqttLogging(enabled))
